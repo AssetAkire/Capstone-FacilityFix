@@ -1,0 +1,144 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().user_role == 'admin';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && getUserData().user_role == 'staff';
+    }
+
+    function isTenant() {
+      return isAuthenticated() && getUserData().user_role == 'tenant';
+    }
+
+    function isStaffOrAdmin() {
+      return isStaff() || isAdmin();
+    }
+
+    function isSameBuilding(buildingId) {
+      return getUserData().building_id == buildingId;
+    }
+
+    // Buildings collection
+    match /buildings/{buildingId} {
+      allow read: if isAuthenticated() && (
+        isStaffOrAdmin() ||
+        isSameBuilding(buildingId)
+      );
+      allow write: if isAdmin();
+    }
+
+    // Units collection
+    match /units/{unitId} {
+      allow read: if isAuthenticated() && (
+        isStaffOrAdmin() ||
+        (isTenant() && isSameBuilding(resource.data.building_id))
+      );
+      allow write: if isStaffOrAdmin();
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (
+        isOwner(userId) ||
+        isStaffOrAdmin() ||
+        (isTenant() && isSameBuilding(resource.data.building_id))
+      );
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && (
+        isOwner(userId) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Equipment collection
+    match /equipment/{equipmentId} {
+      allow read: if isAuthenticated() && (
+        isStaffOrAdmin() ||
+        isSameBuilding(resource.data.building_id)
+      );
+      allow write: if isStaffOrAdmin();
+    }
+
+    // Inventory collection
+    match /inventory/{inventoryId} {
+      allow read: if isAuthenticated() && (
+        isStaffOrAdmin() ||
+        isSameBuilding(resource.data.building_id)
+      );
+      allow write: if isStaffOrAdmin();
+    }
+
+    // Repair Requests collection
+    match /repair_requests/{requestId} {
+      allow read: if isAuthenticated() && (
+        isStaffOrAdmin() ||
+        isOwner(resource.data.reported_by) ||
+        (isTenant() && get(/databases/$(database)/documents/units/$(resource.data.unit_id)).data.building_id == getUserData().building_id)
+      );
+      allow create: if isAuthenticated() && (
+        isOwner(request.resource.data.reported_by) ||
+        isStaffOrAdmin()
+      );
+      allow update: if isAuthenticated() && (
+        isOwner(resource.data.reported_by) ||
+        isStaffOrAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Maintenance Tasks collection
+    match /maintenance_tasks/{taskId} {
+      allow read: if isAuthenticated() && (
+        isStaffOrAdmin() ||
+        isOwner(resource.data.assigned_to)
+      );
+      allow create: if isStaffOrAdmin();
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Announcements collection
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated() && (
+        isStaffOrAdmin() ||
+        isSameBuilding(resource.data.building_id) ||
+        resource.data.audience == 'all' ||
+        (resource.data.audience == 'tenants' && isTenant()) ||
+        (resource.data.audience == 'staff' && isStaff())
+      );
+      allow create: if isStaffOrAdmin();
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Work Order Permits collection
+    match /work_order_permits/{permitId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.user_id) ||
+        isStaffOrAdmin() ||
+        (isTenant() && get(/databases/$(database)/documents/units/$(resource.data.unit_id)).data.building_id == getUserData().building_id)
+      );
+      allow create: if isAuthenticated();
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
