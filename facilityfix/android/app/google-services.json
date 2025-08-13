@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "495669461131",
+    "project_id": "facilityfix-6d27a",
+    "storage_bucket": "facilityfix-6d27a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:495669461131:android:7bf2c59115c9e6e6a7548e",
+        "android_client_info": {
+          "package_name": "com.example.facilityfix"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "495669461131-99o548oi682fvgan18cone8f4nnkbvnb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBe1P1076wLTs6C6RHAAo-pEernmDxUdWM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "495669461131-99o548oi682fvgan18cone8f4nnkbvnb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "495669461131-trcd301duc0ooael3ojjr0beb2sk07ao.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.facilityfix"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
