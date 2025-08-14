@@ -1,4 +1,5 @@
-//import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/building_model.dart';
 import '../models/unit_model.dart';
 import '../models/user_model.dart';
@@ -17,6 +18,9 @@ class DatabaseSeeder {
   Future<void> seedDatabase() async {
     try {
       print('🌱 Starting FacilityFix database seeding...');
+
+      // First, create the current user's profile if it doesn't exist
+      await _createCurrentUserProfile();
 
       // Create test building
       await _createTestBuilding();
@@ -48,6 +52,50 @@ class DatabaseSeeder {
       print('✅ FacilityFix database seeding completed successfully!');
     } catch (e) {
       print('❌ Error seeding database: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _createCurrentUserProfile() async {
+    try {
+      // Get current Firebase user
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        throw Exception('No authenticated user found');
+      }
+
+      // Check if user profile already exists
+      final userDoc =
+          await _databaseService.usersCollection.doc(currentUser.uid).get();
+
+      if (!userDoc.exists) {
+        // Create user profile for the current authenticated user
+        UserModel currentUserProfile = UserModel(
+          id: currentUser.uid,
+          username: currentUser.email?.split('@')[0] ?? 'admin',
+          email: currentUser.email ?? 'admin@facilityfix.com',
+          passwordHash: 'firebase_auth_managed',
+          firstName: 'Admin',
+          lastName: 'User',
+          phoneNumber: '+63-917-000-0000',
+          userRole: UserRole.admin,
+          department: 'System Administration',
+          status: UserStatus.active,
+          buildingId: 'building_001',
+          unitId: null,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        await _databaseService.createUser(currentUserProfile);
+        print(
+          '👤 Created current user profile: ${currentUserProfile.fullName}',
+        );
+      } else {
+        print('👤 Current user profile already exists');
+      }
+    } catch (e) {
+      print('❌ Error creating current user profile: $e');
       rethrow;
     }
   }

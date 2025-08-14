@@ -1,0 +1,132 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Get user's role from user document (since no custom claims without functions)
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      return getUserData().userRole;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && getUserRole() == 'staff';
+    }
+
+    function isTenant() {
+      return isAuthenticated() && getUserRole() == 'tenant';
+    }
+
+    function isStaffOrAdmin() {
+      return isStaff() || isAdmin();
+    }
+
+    // More permissive for direct client operations
+    function isSystemOperation() {
+      return isAuthenticated();
+    }
+
+    // Function to check if user belongs to the same building as the document
+    function isSameBuilding(buildingId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        getUserData().building_id == buildingId;
+    }
+
+    // Buildings collection - more permissive for seeding
+    match /buildings/{buildingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow any authenticated user to create for seeding
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Units collection - more permissive for seeding
+    match /units/{unitId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow any authenticated user to create for seeding
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Users collection - allow self-registration
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      
+      allow create: if isAuthenticated(); // Allow any authenticated user to create their profile
+      
+      allow update: if isAuthenticated() && (
+        isOwner(userId) ||
+        isStaffOrAdmin()
+      );
+      
+      allow delete: if isAdmin();
+    }
+
+    // Equipment collection - more permissive for seeding
+    match /equipment/{equipmentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow any authenticated user to create for seeding
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Inventory collection - more permissive for seeding
+    match /inventory/{inventoryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow any authenticated user to create for seeding
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Repair Requests collection
+    match /repair_requests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        isOwner(resource.data.reported_by) ||
+        isStaffOrAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Maintenance Tasks collection - more permissive for seeding
+    match /maintenance_tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow any authenticated user to create for seeding
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Announcements collection - more permissive for seeding
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow any authenticated user to create for seeding
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Work Order Permits collection
+    match /work_order_permits/{permitId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

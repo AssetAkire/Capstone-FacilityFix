@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
+import 'screens/database_test_screen.dart'; // Add this import
+import 'screens/user_management_screen.dart'; // Import the new screen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,13 +21,18 @@ class MyApp extends StatelessWidget {
       ),
       home: MyHomePage(title: 'FacilityFix Home'),
       debugShowCheckedModeBanner: false,
+      routes: {
+        '/database-test': (context) => DatabaseTestScreen(),
+        '/user-management':
+            (context) =>
+                UserManagementScreen(), // Add route for user management
+      },
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
   MyHomePage({Key? key, required this.title}) : super(key: key);
-
   final String title;
 
   @override
@@ -49,6 +56,23 @@ class _MyHomePageState extends State<MyHomePage> {
             Text(
               'Your facility management solution',
               style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            SizedBox(height: 40),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushNamed(context, '/database-test');
+              },
+              child: Text('Test Database Setup'),
+            ),
+            SizedBox(height: 20), // Add some spacing
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushNamed(
+                  context,
+                  '/user-management',
+                ); // Button to new screen
+              },
+              child: Text('Test User Management'),
             ),
           ],
         ),

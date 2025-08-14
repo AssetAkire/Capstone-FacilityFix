@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Add this import
 import '../services/database_service.dart';
 import '../services/database_seeder.dart';
+import '../services/auth_service.dart'; // Add this import
 import '../models/building_model.dart';
 import '../models/unit_model.dart';
 import '../models/user_model.dart';
@@ -20,10 +22,13 @@ class DatabaseTestScreen extends StatefulWidget {
 class _DatabaseTestScreenState extends State<DatabaseTestScreen> {
   final DatabaseService _databaseService = DatabaseService();
   final DatabaseSeeder _seeder = DatabaseSeeder();
+  final AuthService _authService = AuthService(); // Add this line
 
   bool _isLoading = false;
   String _message = '';
   Map<String, int> _dashboardCounts = {};
+  User? _currentUser; // Add this line
+  bool _isAuthenticated = false; // Add this line
 
   // Data lists
   BuildingModel? _building;
@@ -49,7 +54,8 @@ class _DatabaseTestScreenState extends State<DatabaseTestScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAllData();
+    _setupAuthListener();
+    _checkAuthAndLoadData();
   }
 
   @override
@@ -66,7 +72,59 @@ class _DatabaseTestScreenState extends State<DatabaseTestScreen> {
     super.dispose();
   }
 
+  void _setupAuthListener() {
+    _authService.userChanges.listen((user) {
+      setState(() {
+        _currentUser = user;
+        _isAuthenticated = user != null;
+      });
+      if (user != null) {
+        _loadAllData();
+      } else {
+        _clearData();
+      }
+    });
+  }
+
+  void _clearData() {
+    setState(() {
+      _building = null;
+      _units.clear();
+      _users.clear();
+      _equipment.clear();
+      _inventory.clear();
+      _repairRequests.clear();
+      _maintenanceTasks.clear();
+      _announcements.clear();
+      _workOrderPermits.clear();
+      _dashboardCounts.clear();
+    });
+  }
+
+  Future<void> _checkAuthAndLoadData() async {
+    final user = _authService.getCurrentFirebaseUser();
+    if (user != null) {
+      setState(() {
+        _currentUser = user;
+        _isAuthenticated = true;
+      });
+      await _loadAllData();
+    } else {
+      setState(() {
+        _message = 'Please sign in to access the database.';
+        _isAuthenticated = false;
+      });
+    }
+  }
+
   Future<void> _loadAllData() async {
+    if (!_isAuthenticated) {
+      setState(() {
+        _message = 'Please sign in to access the database.';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _message = 'Loading FacilityFix database...';
@@ -76,7 +134,7 @@ class _DatabaseTestScreenState extends State<DatabaseTestScreen> {
       // Load building
       _building = await _databaseService.getBuilding('building_001');
 
-      // Load all collections
+      // Load all collections with error handling
       final futures = await Future.wait([
         _databaseService.unitsCollection.get(),
         _databaseService.usersCollection.get(),
@@ -121,7 +179,8 @@ class _DatabaseTestScreenState extends State<DatabaseTestScreen> {
       _dashboardCounts = await _databaseService.getDashboardCounts();
 
       setState(() {
-        _message = 'FacilityFix database loaded successfully!';
+        _message =
+            'FacilityFix database loaded successfully! Found ${_users.length} users, ${_units.length} units, ${_repairRequests.length} repair requests.';
         _isLoading = false;
       });
     } catch (e) {
@@ -129,6 +188,7 @@ class _DatabaseTestScreenState extends State<DatabaseTestScreen> {
         _message = 'Error loading database: $e';
         _isLoading = false;
       });
+      print('Database loading error: $e'); // For debugging
     }
   }
 
@@ -325,6 +385,105 @@ class _DatabaseTestScreenState extends State<DatabaseTestScreen> {
     }
   }
 
+  Future<void> _signInTestUser() async {
+    setState(() {
+      _isLoading = true;
+      _message = 'Signing in test user...';
+    });
+
+    try {
+      await _authService.signIn('admin@facilityfix.com', 'password123');
+
+      // Create user profile immediately after sign-in
+      await _createCurrentUserProfileIfNeeded();
+
+      setState(() {
+        _message = 'Signed in successfully and profile created!';
+      });
+    } catch (e) {
+      // If test user doesn't exist, create one
+      try {
+        await _authService.registerUser(
+          email: 'admin@facilityfix.com',
+          password: 'password123',
+          firstName: 'Test',
+          lastName: 'Admin',
+          userRole: UserRole.admin,
+          buildingId: 'building_001',
+        );
+        setState(() {
+          _message = 'Test user created and signed in!';
+        });
+      } catch (registerError) {
+        setState(() {
+          _message = 'Error creating test user: $registerError';
+        });
+      }
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _signOut() async {
+    setState(() {
+      _isLoading = true;
+      _message = 'Signing out...';
+    });
+
+    try {
+      await _authService.signOut();
+      setState(() {
+        _message = 'Signed out successfully!';
+      });
+    } catch (e) {
+      setState(() {
+        _message = 'Error signing out: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _createCurrentUserProfileIfNeeded() async {
+    final currentUser = _authService.getCurrentFirebaseUser();
+    if (currentUser == null) return;
+
+    try {
+      // Check if user profile exists
+      final userDoc =
+          await _databaseService.usersCollection.doc(currentUser.uid).get();
+
+      if (!userDoc.exists) {
+        // Create user profile
+        UserModel userProfile = UserModel(
+          id: currentUser.uid,
+          username: currentUser.email?.split('@')[0] ?? 'admin',
+          email: currentUser.email ?? 'admin@facilityfix.com',
+          passwordHash: 'firebase_auth_managed',
+          firstName: 'Test',
+          lastName: 'Admin',
+          phoneNumber: '+63-917-000-0000',
+          userRole: UserRole.admin,
+          department: 'System Administration',
+          status: UserStatus.active,
+          buildingId: 'building_001',
+          unitId: null,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        await _databaseService.createUser(userProfile);
+        print('Created user profile for: ${userProfile.fullName}');
+      }
+    } catch (e) {
+      print('Error creating user profile: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -338,28 +497,115 @@ class _DatabaseTestScreenState extends State<DatabaseTestScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Control buttons
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _seedDatabase,
-                  icon: Icon(Icons.eco),
-                  label: Text('Seed Database'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+            // Authentication Status Card
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color:
+                    _isAuthenticated
+                        ? Colors.green.shade100
+                        : Colors.orange.shade100,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _isAuthenticated ? Colors.green : Colors.orange,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _isAuthenticated ? Icons.check_circle : Icons.warning,
+                        color:
+                            _isAuthenticated
+                                ? Colors.green.shade800
+                                : Colors.orange.shade800,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        _isAuthenticated
+                            ? 'Authenticated'
+                            : 'Not Authenticated',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color:
+                              _isAuthenticated
+                                  ? Colors.green.shade800
+                                  : Colors.orange.shade800,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox(width: 16),
-                ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _loadAllData,
-                  icon: Icon(Icons.refresh),
-                  label: Text('Refresh Data'),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                ),
-              ],
+                  if (_currentUser != null) ...[
+                    SizedBox(height: 4),
+                    Text('User: ${_currentUser!.email}'),
+                    Text('UID: ${_currentUser!.uid}'),
+                  ],
+                  SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (!_isAuthenticated)
+                        ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _signInTestUser,
+                          icon: Icon(Icons.login),
+                          label: Text('Sign In Test User'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                          ),
+                        ),
+                      if (_isAuthenticated) ...[
+                        ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _signOut,
+                          icon: Icon(Icons.logout),
+                          label: Text('Sign Out'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: _isLoading ? null : _loadAllData,
+                          icon: Icon(Icons.refresh),
+                          label: Text('Refresh Data'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
             ),
 
             SizedBox(height: 16),
+
+            // Control buttons (only show if authenticated)
+            if (_isAuthenticated) ...[
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _seedDatabase,
+                    icon: Icon(Icons.eco),
+                    label: Text('Seed Database'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  ElevatedButton.icon(
+                    onPressed: _isLoading ? null : _loadAllData,
+                    icon: Icon(Icons.refresh),
+                    label: Text('Refresh Data'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+            ],
 
             // Status message
             if (_message.isNotEmpty)
