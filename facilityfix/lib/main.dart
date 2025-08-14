@@ -1,3 +1,4 @@
+import 'package:facilityfix/admin/home.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
@@ -9,18 +10,13 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(MyApp());
 }
-
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'FacilityFix',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-      ),
-      home: MyHomePage(title: 'FacilityFix Home'),
       debugShowCheckedModeBanner: false,
+      
+// backend
       routes: {
         '/database-test': (context) => DatabaseTestScreen(),
         '/user-management':
@@ -75,8 +71,20 @@ class _MyHomePageState extends State<MyHomePage> {
               child: Text('Test User Management'),
             ),
           ],
+
+// front
+      theme: ThemeData(
+        primaryColor: const Color(0xFF005CE8),
+        hintColor: const Color(0xFFF4F5FF),
+        iconButtonTheme: IconButtonThemeData(
+          style: ButtonStyle(
+            backgroundColor: MaterialStateProperty.all<Color>(const Color(0xFFF4F5FF)),
+            foregroundColor: MaterialStateProperty.all<Color>(const Color(0xFF005CE8)),
+          ),
         ),
+        fontFamily: 'Inter',
       ),
+      home: HomePage()
     );
   }
 }
