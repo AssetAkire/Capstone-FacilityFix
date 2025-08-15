@@ -1,4 +1,6 @@
+
 //import 'package:facilityfix/adminweb/pages/adminrole_page.dart';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'adminweb/pages/login_page.dart';
@@ -181,11 +183,24 @@ class PlaceholderPage extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
+// =======
+//     return MaterialApp(
+//       debugShowCheckedModeBanner: false,
+//       theme: ThemeData(
+//         primaryColor: const Color(0xFF005CE8),
+//         hintColor: const Color(0xFFF4F5FF),
+//         iconButtonTheme: IconButtonThemeData(
+//           style: ButtonStyle(
+//             backgroundColor: MaterialStateProperty.all<Color>(const Color(0xFFF4F5FF)),
+//             foregroundColor: MaterialStateProperty.all<Color>(const Color(0xFF005CE8)),
+// >>>>>>> raf-branch
+//           ),
+//         ),
+//         fontFamily: 'Inter',
+//       ),
+// <<<<<<< main
+//     );
+//   }
   
   // Helper function to convert route name to routeKey used in layout
   String _getRouteKey(String routeName) {
@@ -226,6 +241,12 @@ class PlaceholderPage extends StatelessWidget {
   }
 }
 
-// Don't forget to import your FacilityFixLayout
-// You'll need to add this import at the top:
-// import 'adminweb/layout/facilityfix_layout.dart';
+// // Don't forget to import your FacilityFixLayout
+// // You'll need to add this import at the top:
+// // import 'adminweb/layout/facilityfix_layout.dart';
+// =======
+//       home: HomePage()
+//     );
+//   }
+// }
+// >>>>>>> raf-branch

@@ -7,8 +7,8 @@ plugins {
 
 android {
     namespace = "com.example.facilityfix"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    compileSdk = 35
+    ndkVersion = "29.0.13846066"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
