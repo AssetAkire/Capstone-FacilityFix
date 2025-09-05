@@ -1,7 +1,4 @@
-//import 'package:facilityfix/adminweb/pages/adminrole_page.dart';
-//import 'package:facilityfix/adminweb/pages/internalmaintenance_viewform.dart';
-//import 'package:facilityfix/adminweb/pages/externalmaintenance_form.dart';
-//import 'package:facilityfix/adminweb/pages/adminrepair_wop_page.dart';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'adminweb/pages/login_page.dart';
@@ -13,14 +10,10 @@ import 'adminweb/pages/adminmaintenance_page.dart';
 import 'adminweb/pages/adminrepair_cs_page.dart';
 import 'adminweb/pages/adminrepair_js_page.dart';
 import 'adminweb/pages/adminrepair_wop_page.dart';
-// import 'adminweb/pages/calendar_page.dart';
-// import 'adminweb/pages/analytics_page.dart';
-// import 'adminweb/pages/settings_page.dart';
 import 'adminweb/pages/workmaintenance_form.dart';
 import 'adminweb/pages/internalmaintenance_viewform.dart';
 import 'adminweb/pages/externalmaintenance_form.dart';
 import 'adminweb/pages/externalmaintenance_viewform.dart';
-
 
 void main() {
   runApp(MyApp());
@@ -118,23 +111,23 @@ class MyApp extends StatelessWidget {
         builder: (context, state) => const LoginPage(),
       ),
       GoRoute(
-      path: '/adminweb/pages/workmaintenance_form',
-      builder: (context, state) => const InternalMaintenanceFormPage(),
+        path: '/adminweb/pages/workmaintenance_form',
+        builder: (context, state) => const InternalMaintenanceFormPage(),
       ),
       GoRoute(
-      path: '/workmaintenance/internalviewtask',
-      name: 'maintenance_internal',
-      builder: (context, state) => const InternalTaskViewPage(),
+        path: '/workmaintenance/internalviewtask',
+        name: 'maintenance_internal',
+        builder: (context, state) => const InternalTaskViewPage(),
       ),
       GoRoute(
-      path: '/adminweb/pages/externalmaintenance_form',
-      name: 'maintenance_external_form',
-      builder: (context, state) => const ExternalMaintenanceFormPage(),
+        path: '/adminweb/pages/externalmaintenance_form',
+        name: 'maintenance_external_form',
+        builder: (context, state) => const ExternalMaintenanceFormPage(),
       ),
       GoRoute(
-      path: '/adminweb/pages/externalviewtask',
-      name: 'maintenance_external',
-      builder: (context, state) => const ExternalViewTaskPage(),
+        path: '/adminweb/pages/externalviewtask',
+        name: 'maintenance_external',
+        builder: (context, state) => const ExternalViewTaskPage(),
       ),
       GoRoute(
         path: '/adminweb/pages/adminrepair_js_page',
@@ -163,9 +156,9 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
-        fontFamily: 'Inter', // Optional
+        fontFamily: 'Inter',
       ),
-      routerConfig: _router, // Use GoRouter instead of home
+      routerConfig: _router,
     );
   }
 }
@@ -265,6 +258,21 @@ class PlaceholderPage extends StatelessWidget {
   }
 }
 
-// Don't forget to import your FacilityFixLayout
-// You'll need to add this import at the top:
-// import 'adminweb/layout/facilityfix_layout.dart';
+// =======
+//     return MaterialApp(
+//       debugShowCheckedModeBanner: false,
+//       theme: ThemeData(
+//         primaryColor: const Color(0xFF005CE8),
+//         hintColor: const Color(0xFFF4F5FF),
+//         iconButtonTheme: IconButtonThemeData(
+//           style: ButtonStyle(
+//             backgroundColor: MaterialStateProperty.all<Color>(const Color(0xFFF4F5FF)),
+//             foregroundColor: MaterialStateProperty.all<Color>(const Color(0xFF005CE8)),
+// >>>>>>> raf-branch
+//           ),
+//         ),
+//         fontFamily: 'Inter',
+//       ),
+// <<<<<<< main
+//     );
+//   }
