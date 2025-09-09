@@ -1,9 +1,13 @@
-import 'package:facilityfix/landingpage/forgot_password.dart';
-import 'package:facilityfix/tenant/home.dart';
 import 'package:flutter/material.dart';
 
+// Pages
+import 'package:facilityfix/landingpage/forgot_password.dart';
+import 'package:facilityfix/tenant/home.dart' as Tenant;
+import 'package:facilityfix/staff/home.dart' as Staff;
+import 'package:facilityfix/admin/home.dart' as Admin;
+
 class LogIn extends StatefulWidget {
-  final String role;
+  final String role; // 'tenant' | 'staff' | 'admin'
   const LogIn({Key? key, required this.role}) : super(key: key);
 
   @override
@@ -12,12 +16,50 @@ class LogIn extends StatefulWidget {
 
 class _LogInState extends State<LogIn> {
   final _formKey = GlobalKey<FormState>();
+
   final emailController = TextEditingController();
   final idController = TextEditingController();
   final passwordController = TextEditingController();
   final buildingController = TextEditingController();
 
   bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    idController.dispose();
+    passwordController.dispose();
+    buildingController.dispose();
+    super.dispose();
+  }
+
+  void _handleLogin() {
+    if (!_formKey.currentState!.validate()) return;
+
+    final role = widget.role.toLowerCase();
+
+    Widget destination;
+    switch (role) {
+      case 'tenant':
+        destination = const Tenant.HomePage();
+        break;
+      case 'staff':
+        destination = const Staff.HomePage();
+        break;
+      case 'admin':
+        destination = const Admin.HomePage();
+        break;
+      default:
+        destination = const Tenant.HomePage();
+        break;
+    }
+
+    // Replace the modal with the destination
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => destination),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,12 +75,17 @@ class _LogInState extends State<LogIn> {
       fontWeight: FontWeight.w500,
     );
 
+    final isTenant = widget.role.toLowerCase() == 'tenant';
+    final isStaff = widget.role.toLowerCase() == 'staff';
+    final isAdmin = widget.role.toLowerCase() == 'admin';
+
     return GestureDetector(
-      onTap: () => Navigator.of(context).pop(), // Dismiss the modal on tap outside
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).pop(), // tap outside to dismiss
       child: Scaffold(
         backgroundColor: Colors.black.withOpacity(0.5),
         body: GestureDetector(
-          onTap: () {}, // Prevent dismiss on modal tap
+          onTap: () {}, // prevent dismiss on modal tap
           child: Align(
             alignment: Alignment.bottomCenter,
             child: Container(
@@ -72,7 +119,7 @@ class _LogInState extends State<LogIn> {
                         // Form with validation
                         Form(
                           key: _formKey,
-                          child: Container(
+                          child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -80,7 +127,9 @@ class _LogInState extends State<LogIn> {
                                 // Email
                                 TextFormField(
                                   controller: emailController,
-                                  decoration: InputDecoration(
+                                  keyboardType: TextInputType.emailAddress,
+                                  textInputAction: TextInputAction.next,
+                                  decoration: const InputDecoration(
                                     hintText: "Email",
                                     hintStyle: hintTextStyle,
                                     filled: true,
@@ -93,8 +142,8 @@ class _LogInState extends State<LogIn> {
                                     if (value == null || value.isEmpty) {
                                       return 'Email is required';
                                     }
-                                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                                        .hasMatch(value)) {
+                                    final emailRe = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$');
+                                    if (!emailRe.hasMatch(value.trim())) {
                                       return 'Enter a valid email';
                                     }
                                     return null;
@@ -103,10 +152,11 @@ class _LogInState extends State<LogIn> {
                                 const SizedBox(height: 16),
 
                                 // Role-specific fields
-                                if (widget.role == 'tenant') ...[
+                                if (isTenant) ...[
                                   TextFormField(
                                     controller: idController,
-                                    decoration: InputDecoration(
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(
                                       hintText: "Tenant ID",
                                       hintStyle: hintTextStyle,
                                       filled: true,
@@ -116,12 +166,13 @@ class _LogInState extends State<LogIn> {
                                       enabledBorder: borderStyle,
                                     ),
                                     validator: (value) =>
-                                        value == null || value.isEmpty ? 'Tenant ID is required' : null,
+                                        (value == null || value.isEmpty) ? 'Tenant ID is required' : null,
                                   ),
                                   const SizedBox(height: 16),
                                   TextFormField(
                                     controller: buildingController,
-                                    decoration: InputDecoration(
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(
                                       hintText: "Building & Unit No.",
                                       hintStyle: hintTextStyle,
                                       filled: true,
@@ -130,15 +181,16 @@ class _LogInState extends State<LogIn> {
                                       border: borderStyle,
                                       enabledBorder: borderStyle,
                                     ),
-                                    validator: (value) => value == null || value.isEmpty
+                                    validator: (value) => (value == null || value.isEmpty)
                                         ? 'Building & Unit No. is required'
                                         : null,
                                   ),
                                   const SizedBox(height: 16),
-                                ] else if (widget.role == 'staff') ...[
+                                ] else if (isStaff) ...[
                                   TextFormField(
                                     controller: idController,
-                                    decoration: InputDecoration(
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(
                                       hintText: "Staff ID",
                                       hintStyle: hintTextStyle,
                                       filled: true,
@@ -148,13 +200,14 @@ class _LogInState extends State<LogIn> {
                                       enabledBorder: borderStyle,
                                     ),
                                     validator: (value) =>
-                                        value == null || value.isEmpty ? 'Staff ID is required' : null,
+                                        (value == null || value.isEmpty) ? 'Staff ID is required' : null,
                                   ),
                                   const SizedBox(height: 16),
-                                ] else if (widget.role == 'admin') ...[
+                                ] else if (isAdmin) ...[
                                   TextFormField(
                                     controller: idController,
-                                    decoration: InputDecoration(
+                                    textInputAction: TextInputAction.next,
+                                    decoration: const InputDecoration(
                                       hintText: "Admin ID",
                                       hintStyle: hintTextStyle,
                                       filled: true,
@@ -164,7 +217,7 @@ class _LogInState extends State<LogIn> {
                                       enabledBorder: borderStyle,
                                     ),
                                     validator: (value) =>
-                                        value == null || value.isEmpty ? 'Admin ID is required' : null,
+                                        (value == null || value.isEmpty) ? 'Admin ID is required' : null,
                                   ),
                                   const SizedBox(height: 16),
                                 ],
@@ -173,6 +226,7 @@ class _LogInState extends State<LogIn> {
                                 TextFormField(
                                   controller: passwordController,
                                   obscureText: _obscurePassword,
+                                  textInputAction: TextInputAction.done,
                                   decoration: InputDecoration(
                                     hintText: "Password",
                                     hintStyle: hintTextStyle,
@@ -183,15 +237,11 @@ class _LogInState extends State<LogIn> {
                                     enabledBorder: borderStyle,
                                     suffixIcon: IconButton(
                                       icon: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_off
-                                            : Icons.visibility,
+                                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
                                         color: const Color(0xFF818181),
                                       ),
                                       onPressed: () {
-                                        setState(() {
-                                          _obscurePassword = !_obscurePassword;
-                                        });
+                                        setState(() => _obscurePassword = !_obscurePassword);
                                       },
                                     ),
                                   ),
@@ -204,6 +254,7 @@ class _LogInState extends State<LogIn> {
                                     }
                                     return null;
                                   },
+                                  onFieldSubmitted: (_) => _handleLogin(),
                                 ),
                               ],
                             ),
@@ -222,16 +273,7 @@ class _LogInState extends State<LogIn> {
                                   backgroundColor: const Color(0xFF818181),
                                   padding: const EdgeInsets.symmetric(vertical: 14),
                                 ),
-                                onPressed: () {
-                                  if (_formKey.currentState!.validate()) {
-                                    // Form is valid
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) => const HomePage()),
-                                    );
-                                  }
-                                },
+                                onPressed: _handleLogin,
                                 child: const Text(
                                   'Log In',
                                   style: TextStyle(
@@ -258,8 +300,7 @@ class _LogInState extends State<LogIn> {
                                 reverseTransitionDuration: Duration.zero,
                                 pageBuilder: (context, animation, secondaryAnimation) =>
                                     const ForgotPassword(),
-                                transitionsBuilder:
-                                    (context, animation, secondaryAnimation, child) {
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
                                   return child;
                                 },
                               ),

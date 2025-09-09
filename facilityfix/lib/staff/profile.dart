@@ -1,16 +1,16 @@
 import 'dart:io';
+
 import 'package:facilityfix/landingpage/welcomepage.dart';
 import 'package:facilityfix/staff/announcement.dart';
-import 'package:facilityfix/staff/calendar.dart';
 import 'package:facilityfix/staff/home.dart';
-import 'package:facilityfix/staff/inventory.dart';
+import 'package:facilityfix/staff/notification.dart';
 import 'package:facilityfix/staff/workorder.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/forms.dart';
-import 'package:facilityfix/widgets/pop_up.dart';
+import 'package:facilityfix/widgets/modals.dart';
 import 'package:facilityfix/widgets/profile.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -31,19 +31,25 @@ class _ProfilePageState extends State<ProfilePage> {
     NavItem(icon: Icons.inventory),
   ];
 
-  // Controllers moved here
+  // Controllers
+  final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController phoneNumberController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
   File? _profileImageFile;
 
   ImageProvider get _profileImageProvider {
-    if (_profileImageFile != null) {
-      return FileImage(_profileImageFile!);
-    }
+    if (_profileImageFile != null) return FileImage(_profileImageFile!);
     return const AssetImage('assets/images/profile.png');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    nameController.text = 'Jasper Lorredo';
+    emailController.text = 'japser_lorredo@example.com';
+    phoneNumberController.text = '+63 912 345 6789';
   }
 
   void _onTabTapped(int index) {
@@ -51,10 +57,8 @@ class _ProfilePageState extends State<ProfilePage> {
       const HomePage(),
       const WorkOrderPage(),
       const AnnouncementPage(),
-      const CalendarPage(),
-      const InventoryPage(),
+      const ProfilePage(),
     ];
-
     if (index != _selectedIndex) {
       Navigator.pushReplacement(
         context,
@@ -63,43 +67,72 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  void _showRequestDialog(BuildContext context) {
-    showDialog(
+  Future<void> _openPhotoPickerSheet(BuildContext context) async {
+    await showModalBottomSheet(
       context: context,
-      builder: (_) => CustomPopup(
-        title: 'Upload a photo',
-        message: 'Would you like to change your profile photo?',
-        primaryText: 'Upload from gallery',
-        onPrimaryPressed: () async {
-          Navigator.of(context).pop();
-
-          final result = await FilePicker.platform.pickFiles(
-            type: FileType.image,
-            allowMultiple: false,
-          );
-
-          if (result != null && result.files.isNotEmpty) {
-            setState(() {
-              _profileImageFile = File(result.files.first.path!);
-            });
-          }
-        },
-        secondaryText: 'Take a photo',
-        onSecondaryPressed: () async {
-          Navigator.of(context).pop();
-
-          final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
-
-          if (photo != null) {
-            setState(() {
-              _profileImageFile = File(photo.path);
-            });
-          }
-        },
-        icon: Icons.image,
-        primaryIcon: Icons.photo_library,
-        secondaryIcon: Icons.camera_alt,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 48,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Text(
+                'Change profile photo',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Upload from gallery'),
+                onTap: () async {
+                  final result = await FilePicker.platform.pickFiles(
+                    type: FileType.image,
+                    allowMultiple: false,
+                  );
+                  if (result != null && result.files.isNotEmpty) {
+                    final file = File(result.files.first.path!);
+                    setState(() => _profileImageFile = file);
+                  }
+                  if (context.mounted) Navigator.pop(ctx);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined),
+                title: const Text('Take a photo'),
+                onTap: () async {
+                  final XFile? photo =
+                      await _picker.pickImage(source: ImageSource.camera);
+                  if (photo != null) {
+                    final file = File(photo.path);
+                    setState(() => _profileImageFile = file);
+                  }
+                  if (context.mounted) Navigator.pop(ctx);
+                },
+              ),
+              const SizedBox(height: 4),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -108,15 +141,19 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        leading: Row(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 8, 0),
-              child: const BackButton(),
-            ),
-            Text('Profile'),
-          ],
-        ),
+        title: 'Profile',
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationPage()),
+              );
+            },
+          ),
+        ],
+        leading: Row(),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -126,80 +163,98 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               ProfileInfoWidget(
                 profileImage: _profileImageProvider,
-                name: 'Juan Dela Cruz',
+                name: nameController.text,
                 staffId: 'Staff ID: #S12345',
-                onTap: () => _showRequestDialog(context),
+                onTap: () => _openPhotoPickerSheet(context),
               ),
               const SizedBox(height: 24),
+              SectionCard(
+                title: 'Personal Details',
+                trailing: IconButton(
+                  icon: const Icon(Icons.edit, size: 20, color: Colors.blueGrey),
+                  tooltip: 'Edit personal details',
+                  onPressed: () async {
+                    // Uses the no-password version of the sheet (username, email, phone)
+                    final updated = await showEditPersonalDetailsSheet(
+                      context: context,
+                      initialName: nameController.text,
+                      initialEmail: emailController.text,
+                      initialPhone: phoneNumberController.text,
+                    );
 
-              const Text(
-                'Personal Details',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
+                    if (updated == null || !mounted) return;
 
-              InputField(
-                label: 'Email',
-                controller: emailController,
-                hintText: 'Auto-filled',
-                isRequired: true,
-                readOnly: true,
-                prefixIcon: const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Icon(Icons.mail),
+                    setState(() {
+                      nameController.text = updated.name;
+                      emailController.text = updated.email;
+                      phoneNumberController.text = updated.phone;
+                    });
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Personal details updated')),
+                    );
+                  },
+                ),
+                child: Column(
+                  children: [
+                    InputField(
+                      label: 'Name',
+                      controller: nameController,
+                      hintText: 'Auto-filled',
+                      isRequired: true,
+                      readOnly: true,
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(Icons.person),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    InputField(
+                      label: 'Email',
+                      controller: emailController,
+                      hintText: 'Auto-filled',
+                      isRequired: true,
+                      readOnly: true,
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(Icons.mail),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    InputField(
+                      label: 'Phone Number',
+                      controller: phoneNumberController,
+                      hintText: 'Auto-filled',
+                      isRequired: true,
+                      readOnly: true,
+                      prefixIcon: const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(Icons.phone),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-
-              InputField(
-                label: 'Phone Number',
-                controller: phoneNumberController,
-                hintText: 'Auto-filled',
-                isRequired: true,
-                readOnly: true,
-                prefixIcon: const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Icon(Icons.phone),
+              const SizedBox(height: 18),
+              SectionCard(
+                title: 'Settings',
+                child: Column(
+                  children: [
+                    SettingsOption(
+                      text: 'Notifications',
+                      icon: Icons.notifications,
+                      onTap: () {},
+                    ),
+                    const SizedBox(height: 8),
+                    SettingsOption(
+                      text: 'Privacy & Security',
+                      icon: Icons.lock,
+                      onTap: () {},
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-
-              PasswordInputField(
-                label: 'Password',
-                controller: passwordController,
-                hintText: 'Auto-filled',
-                isRequired: true,
-                readOnly: true,
-                prefixIcon: const Padding(
-                  padding: EdgeInsets.all(8.0),
-                  child: Icon(Icons.lock),
-                ),
-              ),
-
               const SizedBox(height: 24),
-
-              const Text(
-                'Settings',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-
-              Column(
-                children: [
-                  SettingsOption(
-                    text: 'Notifications',
-                    icon: Icons.notifications,
-                    onTap: () {},
-                  ),
-                  SettingsOption(
-                    text: 'Privacy & Security',
-                    icon: Icons.lock,
-                    onTap: () {},
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
               LogoutButton(
                 onPressed: () {
                   showDialog(
@@ -216,9 +271,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         );
                       },
                       secondaryText: 'No',
-                      onSecondaryPressed: () {
-                        Navigator.of(context).pop();
-                      },
+                      onSecondaryPressed: () => Navigator.of(context).pop(),
                     ),
                   );
                 },
@@ -231,113 +284,6 @@ class _ProfilePageState extends State<ProfilePage> {
         items: _navItems,
         currentIndex: _selectedIndex,
         onTap: _onTabTapped,
-      ),
-    );
-  }
-}
-
-// Password input field with eye icon to toggle visibility.
-class PasswordInputField extends StatefulWidget {
-  final String label;
-  final TextEditingController controller;
-  final String hintText;
-  final bool isRequired;
-  final bool readOnly;
-  final Widget? prefixIcon;
-
-  const PasswordInputField({
-    super.key,
-    required this.label,
-    required this.controller,
-    this.hintText = '',
-    this.isRequired = false,
-    this.readOnly = false,
-    this.prefixIcon,
-  });
-
-  @override
-  State<PasswordInputField> createState() => _PasswordInputFieldState();
-}
-
-class _PasswordInputFieldState extends State<PasswordInputField> {
-  bool _obscureText = true;
-
-  void _toggleVisibility() {
-    setState(() {
-      _obscureText = !_obscureText;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: widget.controller,
-      readOnly: widget.readOnly,
-      obscureText: _obscureText,
-      decoration: InputDecoration(
-        labelText: widget.label + (widget.isRequired ? ' *' : ''),
-        hintText: widget.hintText,
-        prefixIcon: widget.prefixIcon,
-        suffixIcon: GestureDetector(
-          onTap: _toggleVisibility,
-          child: Icon(_obscureText ? Icons.visibility_off : Icons.visibility),
-        ),
-        border: const OutlineInputBorder(),
-      ),
-    );
-  }
-}
-
-// SettingsOption widget
-class SettingsOption extends StatelessWidget {
-  final String text;
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  const SettingsOption({
-    super.key,
-    required this.text,
-    required this.icon,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 48,
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      decoration: ShapeDecoration(
-        color: Colors.white,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(
-            width: 1,
-            color: const Color(0xFFEEF0F4),
-          ),
-          borderRadius: BorderRadius.circular(4),
-        ),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(width: 16),
-            Icon(icon, color: const Color(0xFF545F70), size: 24),
-            const SizedBox(width: 24),
-            Text(
-              text,
-              style: const TextStyle(
-                color: Color(0xFF545F70),
-                fontSize: 16,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w400,
-                height: 1.38,
-                letterSpacing: -0.32,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

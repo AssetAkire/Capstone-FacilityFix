@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'adminweb/pages/login_page.dart';
@@ -15,6 +14,8 @@ import 'adminweb/pages/internalmaintenance_viewform.dart';
 import 'adminweb/pages/externalmaintenance_form.dart';
 import 'adminweb/pages/externalmaintenance_viewform.dart';
 
+// import 'package:facilityfix/staff/home.dart';
+// import 'package:flutter/material.dart';
 void main() {
   runApp(MyApp());
 }
@@ -216,6 +217,10 @@ class PlaceholderPage extends StatelessWidget {
           ),
         ),
       ),
+// <<<<<<< raf-branch
+// =======
+//       home: HomePage(),
+// >>>>>>> front-end
     );
   }
   

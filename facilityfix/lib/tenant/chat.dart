@@ -68,14 +68,12 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
+        title: 'Chat',
         leading: Row(
           children: const [
             Padding(
               padding: EdgeInsets.only(right: 8),
               child: BackButton(),
-            ),
-            Text(
-              'Chat',
             ),
           ],
         ),

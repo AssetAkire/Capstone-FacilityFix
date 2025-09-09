@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 // Status Tab Selector
@@ -94,28 +95,72 @@ class StatusTabSelector extends StatelessWidget {
   }
 }
 
-// Search and Filter
+// Search and Filter Bar --------------------------------------
 class SearchAndFilterBar extends StatelessWidget {
   final TextEditingController searchController;
-  final String selectedClassification;
-  final List<String> classifications;
-  final void Function(String) onSearchChanged;
-  final void Function(String) onFilterChanged;
+
+  // Classification (optional)
+  final String? selectedClassification;
+  final List<String>? classifications;
+  final void Function(String)? onSearchChanged;
+  final void Function(String)? onClassificationChanged;
+
+  // Status (required)
+  final String selectedStatus;
+  final List<String> statuses;
+  final void Function(String) onStatusChanged;
 
   const SearchAndFilterBar({
     super.key,
     required this.searchController,
-    required this.selectedClassification,
-    required this.classifications,
-    required this.onSearchChanged,
-    required this.onFilterChanged,
+
+    // Classification (optional)
+    this.selectedClassification,
+    this.classifications,
+    this.onSearchChanged,
+    this.onClassificationChanged,
+
+    // Status (required)
+    required this.selectedStatus,
+    required this.statuses,
+    required this.onStatusChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final borderRadius = BorderRadius.circular(12);
+
+    // Reusable button builder
+    Widget _filterButton({
+      required IconData icon,
+      required VoidCallback onTap,
+    }) {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: ShapeDecoration(
+          color: const Color(0xFFF4F5FF),
+          shape: RoundedRectangleBorder(
+            side: const BorderSide(width: 1, color: Color(0xFFE7E7E8)),
+            borderRadius: borderRadius,
+          ),
+        ),
+        child: InkWell(
+          borderRadius: borderRadius,
+          onTap: onTap,
+          child: Center(child: Icon(icon, size: 20, color: Colors.black)),
+        ),
+      );
+    }
+
+    final hasClassification =
+        classifications != null &&
+        classifications!.isNotEmpty &&
+        selectedClassification != null &&
+        onClassificationChanged != null;
+
     return Row(
       children: [
-
         // Search Field
         Expanded(
           child: Container(
@@ -129,83 +174,262 @@ class SearchAndFilterBar extends StatelessWidget {
                   strokeAlign: BorderSide.strokeAlignOutside,
                   color: Color(0xFFE5E7E8),
                 ),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: borderRadius,
               ),
             ),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                const Icon(Icons.search, size: 20, color: Color(0xFF6E6E70)),
+                const SizedBox(width: 8),
                 Expanded(
-                  child: TextField(
-                    controller: searchController,
-                    onChanged: onSearchChanged,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w400,
-                      color: Colors.black,
-                      height: 1.83,
-                    ),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                      hintText: 'Search work orders...',
-                      border: InputBorder.none,
-                      hintStyle: TextStyle(
-                        color: Color(0xFF6E6E70),
-                        fontSize: 12,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w400,
-                        height: 1.83,
-                      ),
-                    ),
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: searchController,
+                    builder: (_, __, ___) {
+                      return TextField(
+                        controller: searchController,
+                        onChanged: (v) => onSearchChanged?.call(v),
+                        onSubmitted: (v) => onSearchChanged?.call(v),
+                        textInputAction: TextInputAction.search,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w400,
+                          color: Colors.black,
+                          height: 1.83,
+                        ),
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          hintText: 'Search work orders...',
+                          border: InputBorder.none,
+                          hintStyle: TextStyle(
+                            color: Color(0xFF6E6E70),
+                            fontSize: 12,
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w400,
+                            height: 1.83,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
-                const SizedBox(width: 8),
-                const Icon(Icons.search, size: 24, color: Color(0xFF6E6E70)),
+                // Clear button
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: searchController,
+                  builder: (_, value, __) {
+                    if (value.text.isEmpty) return const SizedBox.shrink();
+                    return IconButton(
+                      icon: const Icon(Icons.close,
+                          size: 18, color: Color(0xFF6E6E70)),
+                      splashRadius: 18,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Clear',
+                      onPressed: () {
+                        searchController.clear();
+                        onSearchChanged?.call('');
+                      },
+                    );
+                  },
+                ),
               ],
             ),
           ),
         ),
         const SizedBox(width: 8),
 
-        // Filter Button
-        Container(
-          width: 48,
-          height: 48,
-          decoration: ShapeDecoration(
-            color: const Color(0xFFF4F5FF), // background color here
-            shape: RoundedRectangleBorder(
-              side: const BorderSide(width: 1, color: Color(0xFFE7E7E8)),
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: PopupMenuButton<String>(
-            icon: const Icon(Icons.filter_alt_outlined, size: 20, color: Colors.black),
-            onSelected: onFilterChanged,
-            itemBuilder: (BuildContext context) {
-              return classifications.map((String value) {
-                return PopupMenuItem<String>(
-                  value: value,
-                  child: Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontFamily: 'Inter',
-                    ),
-                  ),
-                );
-              }).toList();
+        // Classification Filter (optional)
+        if (hasClassification) ...[
+          _filterButton(
+            icon: Icons.tune,
+            onTap: () async {
+              final picked = await _showOptionPickerSheet(
+                context,
+                title: 'Filter by classification',
+                options: classifications!,
+                current: selectedClassification!,
+              );
+              if (picked != null) onClassificationChanged!(picked);
             },
           ),
-        )
+          const SizedBox(width: 8),
+        ],
 
+        // Status Filter 
+        _filterButton(
+          icon: Icons.filter_list,
+          onTap: () async {
+            final picked = await _showOptionPickerSheet(
+              context,
+              title: 'Filter by status',
+              options: statuses,
+              current: selectedStatus,
+            );
+            if (picked != null) onStatusChanged(picked);
+          },
+        ),
       ],
     );
   }
 }
 
-// Add Button
+/// Bottom sheet picker: list of rows with icons.
+Future<String?> _showOptionPickerSheet(
+  BuildContext context, {
+  required List<String> options,
+  required String current,
+  String title = 'Select an option',
+}) {
+  final scheme = Theme.of(context).colorScheme;
+  final onSurface = scheme.onSurface;
+
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: scheme.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) {
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 8,
+            right: 8,
+            top: 12,
+            bottom: 8 + MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // grab handle
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFDDDEE0),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // header row
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      tooltip: 'Close',
+                      onPressed: () => Navigator.pop(ctx),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Options list
+              Flexible(
+                child: Theme(
+                  data: Theme.of(ctx).copyWith(
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    hoverColor: Colors.transparent,
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: options.length,
+                    separatorBuilder: (_, __) =>
+                        const SizedBox(height: 8), 
+                    itemBuilder: (_, i) {
+                      final opt = options[i];
+                      return ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        leading: Icon(
+                          _iconForOption(opt),
+                          size: 18, 
+                          color: const Color(0xFF6E6E70),
+                        ),
+                        title: Text(
+                          _labelForOption(opt),
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 18, 
+                            fontWeight: FontWeight.w500,
+                            color: onSurface,
+                          ),
+                        ),
+                        onTap: () => Navigator.pop(ctx, opt), // auto-close
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// Friendly label (Title Case) for display.
+String _labelForOption(String raw) {
+  final s = raw.trim();
+  if (s.isEmpty) return s;
+  return s
+      .split(' ')
+      .map((w) =>
+          w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+      .join(' ');
+}
+
+/// Icon mapping for statuses, departments, and announcement categories.
+IconData _iconForOption(String raw) {
+  final v = raw.trim().toLowerCase();
+
+  // Statuses
+  if (v == 'all') return Icons.filter_alt;
+  if (v == 'pending') return Icons.hourglass_bottom;
+  if (v == 'in progress') return Icons.timelapse;
+  if (v == 'on hold') return Icons.pause_circle_filled;
+  if (v == 'assigned') return Icons.assignment_ind;
+  if (v == 'assessed') return Icons.verified;
+  if (v == 'scheduled') return Icons.event_available;
+  if (v == 'done' || v == 'completed') return Icons.check_circle;
+
+  // Departments
+  if (v == 'hvac') return Icons.ac_unit;
+  if (v == 'electrical') return Icons.bolt;
+  if (v == 'plumbing') return Icons.plumbing;
+  if (v == 'masonry') return Icons.construction;
+  if (v == 'carpentry') return Icons.handyman;
+  if (v == 'pest control') return Icons.bug_report;
+
+  // Announcement categories
+  if (v == 'utility interruption') return Icons.water_drop;
+  if (v == 'power outage') return Icons.power_off;
+  if (v == 'pest control') return Icons.pest_control;
+  if (v == 'maintenance') return Icons.handyman;
+
+  // Default
+  return Icons.label_rounded;
+}
+
+
+// Add Button -------------------------------------
 class AddButton extends StatelessWidget {
   final VoidCallback onPressed;
   final IconData icon;
@@ -245,76 +469,6 @@ class AddButton extends StatelessWidget {
   }
 }
 
-// Filled Text Button
-class FilledButton extends StatelessWidget {
-  final String label;
-  final VoidCallback onPressed;
-  final Color backgroundColor;
-  final Color textColor;
-  final double width;
-  final double height;
-  final double borderRadius;
-  final TextStyle? textStyle;
-
-  const FilledButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.backgroundColor = const Color(0xFF005CE7),
-    this.textColor = Colors.white,
-    this.width = 375,
-    this.height = 80,
-    this.borderRadius = 100,
-    this.textStyle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: ShapeDecoration(
-        color: const Color(0xFFFEFEFE),
-        shape: RoundedRectangleBorder(
-        side: BorderSide(
-        width: 1,
-        color: const Color(0xFFD0D5DD),
-        ),
-        ),
-      ),
-      child: GestureDetector(
-        onTap: onPressed,
-        child: Container(
-          width: double.infinity,
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: ShapeDecoration(
-            color: backgroundColor,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(borderRadius),
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: textStyle ??
-                TextStyle(
-                  color: textColor,
-                  fontSize: 14,
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w600,
-                  height: 1.43,
-                  letterSpacing: 0.10,
-                ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // Dropdown
 class DropdownField<T> extends StatefulWidget {
   final String label;
@@ -343,7 +497,7 @@ class DropdownField<T> extends StatefulWidget {
     this.prefixIcon,
     this.suffixIcon,
     this.isMultiSelect = false,
-    this.otherController,
+    this.otherController, String? errorText, required String requiredMessage,
   });
 
   @override
@@ -491,6 +645,473 @@ class _DropdownFieldState<T> extends State<DropdownField<T>> {
           ]
         ],
       ),
+    );
+  }
+}
+
+// Work Order Request Type Picker
+class RequestTypePicker extends StatefulWidget {
+  final String label;
+  final bool isRequired;
+  final ValueChanged<String> onChanged;
+
+  /// Optional initial preset value (must match one of the items) OR initial custom value if others.
+  final String? initialValue;
+
+  const RequestTypePicker({
+    super.key,
+    this.label = 'Request Type',
+    this.isRequired = true,
+    required this.onChanged,
+    this.initialValue,
+  });
+
+  @override
+  State<RequestTypePicker> createState() => _RequestTypePickerState();
+}
+
+class _RequestTypePickerState extends State<RequestTypePicker> {
+  static const _presets = <String>[
+    'Air Conditioning',
+    'Electrical',
+    'Civil/Carpentry',
+    'Plumbing',
+    'Others',
+  ];
+
+  String? _selected;          // one of _presets
+  final TextEditingController _otherCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize selection from initialValue.
+    if (widget.initialValue != null && widget.initialValue!.trim().isNotEmpty) {
+      final val = widget.initialValue!.trim();
+      if (_presets.contains(val)) {
+        _selected = val;
+      } else {
+        _selected = 'Others';
+        _otherCtrl.text = val;
+      }
+    }
+
+    // Notify parent on init if we have an initial resolved value
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.onChanged(_resolvedValue());
+    });
+  }
+
+  @override
+  void dispose() {
+    _otherCtrl.dispose();
+    super.dispose();
+  }
+
+  String _resolvedValue() {
+    if (_selected == 'Others') {
+      return _otherCtrl.text.trim();
+    }
+    return _selected ?? '';
+  }
+
+  InputDecoration _inputDec({String? hint}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(fontFamily: 'Inter', fontSize: 14, color: Color(0xFF98A2B3)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFD0D5DD)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFF2563EB)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final labelText = widget.isRequired ? '${widget.label} *' : widget.label;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Field title
+        Text(
+          labelText,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF475467),
+          ),
+        ),
+        const SizedBox(height: 6),
+
+        // Dropdown
+        DropdownButtonFormField<String>(
+          value: _selected,
+          isExpanded: true,
+          decoration: _inputDec(),
+          items: _presets
+              .map((e) => DropdownMenuItem<String>(
+                    value: e,
+                    child: Text(e, style: const TextStyle(fontFamily: 'Inter', fontSize: 14)),
+                  ))
+              .toList(),
+          onChanged: (val) {
+            setState(() => _selected = val);
+            // If switching away from Others, clear other text
+            if (val != 'Others') {
+              _otherCtrl.clear();
+            }
+            widget.onChanged(_resolvedValue());
+          },
+          validator: (val) {
+            if (widget.isRequired && (val == null || val.isEmpty)) {
+              return 'Please select a request type';
+            }
+            return null;
+          },
+        ),
+
+        // Animated "Other" text field
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          child: (_selected == 'Others')
+              ? Padding(
+                  key: const ValueKey('others-field'),
+                  padding: const EdgeInsets.only(top: 12.0),
+                  child: TextFormField(
+                    controller: _otherCtrl,
+                    decoration: _inputDec(hint: 'Please specify'),
+                    onChanged: (_) => widget.onChanged(_resolvedValue()),
+                    validator: (v) {
+                      if (_selected == 'Others' && widget.isRequired) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Please enter a custom request type';
+                        }
+                      }
+                      return null;
+                    },
+                  ),
+                )
+              : const SizedBox.shrink(key: ValueKey('no-others')),
+        ),
+      ],
+    );
+  }
+}
+
+/// A reusable outlined pill-shaped button with optional icon.
+class OutlinedPillButton extends StatelessWidget {
+  final IconData? icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  final bool isLoading;
+
+  final double height;
+  final double borderRadius;
+  final EdgeInsetsGeometry padding;
+
+  final Color? backgroundColor; // fill behind outline (usually white/transparent)
+  final Color? foregroundColor; // icon/text color
+  final Color? borderColor;
+  final double borderWidth;
+  final Color? splashColor;
+
+  final String? tooltip;
+
+  const OutlinedPillButton({
+    super.key,
+    required this.label,
+    this.icon,
+    this.onPressed,
+    this.isLoading = false,
+    this.height = 48,
+    this.borderRadius = 100,
+    this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    this.backgroundColor,
+    this.foregroundColor,
+    this.borderColor,
+    this.borderWidth = 1,
+    this.splashColor,
+    this.tooltip,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    final enabled = onPressed != null && !isLoading;
+
+    // Sensible defaults pulled from theme
+    final Color fg = (foregroundColor ??
+        (enabled ? const Color(0xFF374151) : theme.disabledColor));
+    final Color bg = backgroundColor ?? Colors.white;
+    final Color br = borderColor ??
+        (enabled ? const Color(0xFFD0D5DD) : theme.disabledColor.withOpacity(0.5));
+    final Color splash = splashColor ?? theme.colorScheme.primary.withOpacity(0.12);
+
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(borderRadius),
+      side: BorderSide(color: br, width: borderWidth),
+    );
+
+    Widget button = ConstrainedBox(
+      constraints: BoxConstraints(minHeight: height),
+      child: Material(
+        color: Colors.transparent,
+        shape: shape, // for proper ink clipping
+        child: Ink(
+          decoration: ShapeDecoration(color: bg, shape: shape),
+          child: InkWell(
+            onTap: enabled ? onPressed : null,
+            customBorder: shape,
+            splashColor: splash,
+            highlightColor: splash.withOpacity(0.6),
+            child: Padding(
+              padding: padding,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isLoading) ...[
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(fg),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ] else if (icon != null) ...[
+                    Icon(icon, size: 20, color: fg),
+                    const SizedBox(width: 8),
+                  ],
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (tooltip != null && tooltip!.trim().isNotEmpty) {
+      button = Tooltip(message: tooltip!, child: button);
+    }
+
+    // Add semantics for accessibility (announce disabled/loading states)
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      value: isLoading ? 'Loading' : null,
+      child: button,
+    );
+  }
+}
+
+/// Filled Button (pill)
+class FilledButton extends StatelessWidget {
+  final String label;
+  final VoidCallback? onPressed;
+
+  final Color backgroundColor;
+  final Color textColor;
+
+  final double? width;
+  final double height;
+
+  final double borderRadius;
+  final TextStyle? textStyle;
+  final IconData? leadingIcon;
+
+  final bool isLoading;
+  final bool isDisabled;
+  final Gradient? gradient;
+  final double elevation;
+
+  /// whether to show the outer white container with border
+  final bool withOuterBorder;
+  final IconData? icon;
+
+  const FilledButton({
+    super.key,
+    required this.label,
+    required VoidCallback onPressed,
+    this.backgroundColor = const Color(0xFF00A35A), // your green
+    this.textColor = Colors.white,
+    this.width,
+    this.height = 48,
+    this.borderRadius = 100,
+    this.textStyle,
+    this.leadingIcon,
+    this.isLoading = false,
+    this.isDisabled = false,
+    this.gradient,
+    this.elevation = 2.0,
+    this.withOuterBorder = true,
+    this.icon,
+  }) : onPressed = (isDisabled || isLoading) ? null : onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final effectiveTextStyle = (textStyle ??
+            theme.textTheme.labelLarge?.copyWith(
+              color: textColor,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.1,
+            )) ??
+        TextStyle(
+          color: textColor,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.1,
+        );
+
+    final disabled = onPressed == null;
+    final baseColor = disabled ? const Color(0xFFEBECEF) : backgroundColor;
+    final fgColor = disabled ? const Color(0xFF9CA3AF) : textColor;
+
+    Color overlay(Color c, double o) => c.withOpacity(o);
+
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(borderRadius),
+    );
+
+    Widget buttonCore = Material(
+      elevation: elevation,
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(borderRadius),
+      clipBehavior: Clip.antiAlias,
+      child: Ink(
+        height: height,
+        width: width ?? double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(borderRadius),
+          color: gradient == null ? baseColor : null,
+          gradient: disabled ? null : gradient,
+          boxShadow: elevation > 0
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: shape,
+          splashColor: overlay(Colors.white, 0.20),
+          highlightColor: overlay(Colors.black, 0.05),
+          hoverColor: overlay(Colors.white, 0.06),
+          focusColor: overlay(Colors.white, 0.12),
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, anim) =>
+                  FadeTransition(opacity: anim, child: child),
+              child: isLoading
+                  ? SizedBox(
+                      key: const ValueKey('loading'),
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(fgColor),
+                      ),
+                    )
+                  : _ButtonContent(
+                      key: const ValueKey('content'),
+                      label: label,
+                      textStyle: effectiveTextStyle.copyWith(color: fgColor),
+                      leadingIcon: leadingIcon,
+                      iconColor: fgColor,
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (withOuterBorder) {
+      buttonCore = Material(
+        color: const Color(0xFFFEFEFE),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+          side: BorderSide(width: 1, color: Color(0xFFD0D5DD)),
+        ),
+        child: Padding(
+          // ⬇️ no extra vertical height from the wrapper
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+          child: buttonCore,
+        ),
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        // ⬇️ keep minHeight to the button's own height only
+        minHeight: height,
+        maxWidth: width ?? double.infinity,
+      ),
+      child: buttonCore,
+    );
+  }
+}
+
+class _ButtonContent extends StatelessWidget {
+  final String label;
+  final TextStyle textStyle;
+  final IconData? leadingIcon;
+  final Color iconColor;
+
+  const _ButtonContent({
+    super.key,
+    required this.label,
+    required this.textStyle,
+    this.leadingIcon,
+    required this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Text(label, textAlign: TextAlign.center, style: textStyle);
+    if (leadingIcon == null) return content;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(leadingIcon, size: 18, color: iconColor),
+        const SizedBox(width: 8),
+        Flexible(child: content),
+      ],
     );
   }
 }

@@ -17,7 +17,7 @@ class WelcomePage extends StatelessWidget {
               padding: const EdgeInsets.only(top: 40.0),
               child: Center(
                 child: Image.asset(
-                  "assets/images/Logo.png",
+                  "assets/images/logo.png",
                   height: 120,
                 ),
               ),

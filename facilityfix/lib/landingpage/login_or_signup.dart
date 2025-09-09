@@ -1,5 +1,4 @@
 import 'package:facilityfix/landingpage/choose.dart';
-import 'package:facilityfix/tenant/home.dart';
 import 'package:flutter/material.dart';
 
 class LoginOrSignup extends StatelessWidget {
@@ -18,7 +17,7 @@ class LoginOrSignup extends StatelessWidget {
               padding: const EdgeInsets.only(top: 40.0),
               child: Center(
                 child: Image.asset(
-                  "assets/images/Logo.png",
+                  'assets/images/logo.png',
                   height: 120,
                 ),
               ),
@@ -110,34 +109,6 @@ class LoginOrSignup extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-
-                      // Home Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF005CE8),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const HomePage(),
-                              ),
-                            );
-                          },
-                          child: const Text(
-                            'Home',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-
                     ],
                   ),
                 ),

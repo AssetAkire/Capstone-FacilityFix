@@ -3,25 +3,24 @@ import 'package:facilityfix/admin/calendar.dart';
 import 'package:facilityfix/admin/home.dart';
 import 'package:facilityfix/admin/inventory.dart';
 import 'package:facilityfix/admin/workorder.dart';
-import 'package:facilityfix/widgets/buttons.dart';
-import 'package:facilityfix/widgets/forms.dart' hide DropdownField;
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart' hide FilledButton;
+import 'package:facilityfix/widgets/buttons.dart'; // FilledButton
+import 'package:facilityfix/widgets/forms.dart' hide DropdownField; // use BOTH: InputField + DropdownField
+import 'package:flutter/material.dart' hide FilledButton; // hide Flutter FilledButton
 import 'package:facilityfix/widgets/app&nav_bar.dart';
+import 'package:facilityfix/widgets/modals.dart'; // CustomPopup
 
 class AnnouncementForm extends StatefulWidget {
   final String requestType;
 
-  const AnnouncementForm({
-    super.key,
-    required this.requestType,
-  });
+  const AnnouncementForm({super.key, required this.requestType});
 
   @override
   State<AnnouncementForm> createState() => _AnnouncementFormState();
 }
 
 class _AnnouncementFormState extends State<AnnouncementForm> {
+  // ---------------- Form & Nav ----------------
+  final _formKey = GlobalKey<FormState>();
   int _selectedIndex = 2;
 
   final List<NavItem> _navItems = const [
@@ -49,255 +48,367 @@ class _AnnouncementFormState extends State<AnnouncementForm> {
     }
   }
 
-  Future<void> _selectDateTime(BuildContext context) async {
-    final DateTime? pickedDate = await showDatePicker(
+  // ---------------- Date/Time State ----------------
+  DateTime? _visibilityFromDT;
+  DateTime? _visibilityToDT;
+  DateTime? _postingDT; // optional
+
+  Future<void> _pickVisibilityFrom() async {
+    final dt = await _pickDateTime();
+    if (dt != null) {
+      setState(() {
+        _visibilityFromDT = dt;
+        scheduleVisibilityFromController.text = _formatDT(dt);
+      });
+      _maybeRevalidate();
+    }
+  }
+
+  Future<void> _pickVisibilityTo() async {
+    final dt = await _pickDateTime();
+    if (dt != null) {
+      setState(() {
+        _visibilityToDT = dt;
+        scheduleVisibilityToController.text = _formatDT(dt);
+      });
+      _maybeRevalidate();
+    }
+  }
+
+  Future<void> _pickPosting() async {
+    final dt = await _pickDateTime();
+    if (dt != null) {
+      setState(() {
+        _postingDT = dt;
+        schedulePostingController.text = _formatDT(dt);
+      });
+      _maybeRevalidate();
+    }
+  }
+
+  Future<DateTime?> _pickDateTime() async {
+    final pickedDate = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
+    if (pickedDate == null) return null;
 
-    if (pickedDate != null) {
-      final TimeOfDay? pickedTime = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.now(),
-      );
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+    if (pickedTime == null) return null;
 
-      if (pickedTime != null) {
-        final formattedDate =
-            "${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}";
-        final formattedTime = pickedTime.format(context);
-        availabilityController.text = "$formattedDate at $formattedTime";
+    return DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+  }
+
+  String _two(int v) => v.toString().padLeft(2, '0');
+  String _formatDT(DateTime dt) =>
+      "${dt.year}-${_two(dt.month)}-${_two(dt.day)} ${_two(dt.hour)}:${_two(dt.minute)}";
+
+  void _maybeRevalidate() {
+    if (_submitted) {
+      _formKey.currentState?.validate(); // refresh red borders
+      setState(() {}); // refresh captions
+    }
+  }
+
+  // ---------------- Controllers ----------------
+  final TextEditingController audienceController = TextEditingController();
+  final TextEditingController noticeTypeController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
+  final TextEditingController locationController = TextEditingController();
+
+  final TextEditingController scheduleVisibilityFromController =
+      TextEditingController();
+  final TextEditingController scheduleVisibilityToController =
+      TextEditingController();
+  final TextEditingController schedulePostingController =
+      TextEditingController();
+
+  // Optional “Others” inputs (if you use Others in dropdowns)
+  final TextEditingController audienceOtherController = TextEditingController();
+  final TextEditingController noticeTypeOtherController = TextEditingController();
+
+  // ---------------- Maintenance-style flags ----------------
+  bool _submitted = false;
+
+  // ---------------- Tiny 4px caption style ----------------
+  static const TextStyle _kErr4px = TextStyle(
+    color: Color(0xFFD92D20),
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    height: 0.33, // ~4px line height
+  );
+
+  Widget _errorCaption(String? msg) {
+    if (msg == null || msg.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text(msg, style: _kErr4px),
+    );
+  }
+
+  // ---------------- Error calculators ----------------
+  String? _errDescription() {
+    final txt = descriptionController.text.trim();
+    if (txt.isEmpty) return 'Description is required.';
+    if (txt.length < 10) return 'Please enter at least 10 characters.';
+    return null;
+  }
+
+  String? _errLocation() {
+    if (locationController.text.trim().isEmpty) return 'Location is required.';
+    return null;
+  }
+
+  String? _errSchedule() {
+    // optional: if both blank → no error
+    if (scheduleVisibilityFromController.text.trim().isEmpty &&
+        scheduleVisibilityToController.text.trim().isEmpty) {
+      return null;
+    }
+
+    if (scheduleVisibilityFromController.text.trim().isEmpty ||
+        scheduleVisibilityToController.text.trim().isEmpty) {
+      return 'Both From and To are required if one is set.';
+    }
+
+    if (_visibilityFromDT != null &&
+        _visibilityToDT != null &&
+        _visibilityFromDT!.isAfter(_visibilityToDT!)) {
+      return 'Visibility "From" must be before "To".';
+    }
+
+    return null;
+  }
+
+  String? _errPosting() {
+    if (_postingDT != null && _visibilityFromDT != null) {
+      if (_postingDT!.isAfter(_visibilityFromDT!)) {
+        return 'Posting must be on/before Visibility From.';
       }
     }
+    return null;
   }
 
-  // Controllers
-  final TextEditingController taskNameController = TextEditingController();
-  final TextEditingController idController = TextEditingController();
-  final TextEditingController nameController = TextEditingController();
-  final TextEditingController dateCreatedController = TextEditingController();
-  final TextEditingController descriptionController = TextEditingController();
-
-  final TextEditingController unitController = TextEditingController();
-  final TextEditingController titleController = TextEditingController();
-  final TextEditingController availabilityController = TextEditingController();
-  final TextEditingController priorityController = TextEditingController();
-  final TextEditingController statusController = TextEditingController();
-  final TextEditingController locationController = TextEditingController();
-  final TextEditingController hoursController = TextEditingController();
-  final TextEditingController dateStartedController = TextEditingController();
-  final TextEditingController dueDateController = TextEditingController();
-  final TextEditingController adminNotificationController = TextEditingController();
-  final TextEditingController staffNotificationController = TextEditingController();
-  final TextEditingController otherPriorityController = TextEditingController();
-  final TextEditingController remarksController = TextEditingController();
-
-  final List<TextEditingController> checklistControllers = [];
-
-  PlatformFile? selectedFile;
-
-  // For dropdowns
-  String? recurringValue;
-  String? departmentValue;
-  String? staffValue;
-  String? priorityValue;
-  String? locationValue; 
-
-  final List<String> notificationOptions = [
-    'Same Day',
-    '1 Day Before',
-    '2 Days Before',  
-    '3 Days Before',
-    '1 Week Before',
-    '1 Month Before',
-    '3 Months Before',
-  ];
-
-  List<String> adminNotifTime = [];
-  List<String> staffNotifTime = [];
-
-  void addChecklistItem() {
-    setState(() => checklistControllers.add(TextEditingController()));
+  bool _hasAnyError() {
+    if (audienceController.text.trim().isEmpty) return true;
+    if (noticeTypeController.text.trim().isEmpty) return true;
+    if (_errDescription() != null) return true;
+    if (_errLocation() != null) return true;
+    if (_errSchedule() != null) return true;
+    if (_errPosting() != null) return true;
+    return false;
   }
 
-  void removeChecklistItem(int index) {
-    setState(() => checklistControllers.removeAt(index));
-  }
+  // ---------------- Form body ----------------
+  List<Widget> _formFields() {
+    return [
+      const Text('Detail Information', style: TextStyle(fontSize: 20)),
+      const Text('Enter Detail Information', style: TextStyle(fontSize: 14)),
+      const SizedBox(height: 8),
 
-  List<Widget> getFormFields() {
-    switch (widget.requestType) {
-      case 'Basic Information':
-        return [
-          const Text('Basic Information', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
+      // Audience
+      DropdownField<String>(
+        label: 'Audience',
+        items: const ['Tenant', 'Staff', 'All', 'Others'],
+        value: audienceController.text.isEmpty ? null : audienceController.text,
+        onChanged: (v) => setState(() => audienceController.text = v ?? ''),
+        isRequired: _submitted,
+        requiredMessage: 'Audience is required.',
+        hintText: 'Select audience',
+        otherController: audienceOtherController,
+      ),
 
-          InputField(label: 'Task Title', controller: idController, hintText: 'Enter Task Title', isRequired: true, readOnly: false),
-          InputField(label: 'Task Id', controller: idController, hintText: 'Auto-filled', isRequired: true, readOnly: true),
-          InputField(label: 'Created By', controller: taskNameController, hintText: 'Auto-filled', isRequired: true, readOnly: true),
-          InputField(label: 'Date Created', controller: dateCreatedController, hintText: 'Auto-filled', isRequired: true, readOnly: true),
-          
-          DropdownField<String>(
-            label: 'Priority',
-            value: priorityValue,
-            items: ['Low', 'Medium', 'High'],
-            onChanged: (newValue) {
-              setState(() => priorityValue = newValue);
-            },
-            isRequired: true,
-            otherController: otherPriorityController,
-          ),
+      // Notice Type
+      DropdownField<String>(
+        label: 'Notice Type',
+        items: const [
+          'Scheduled Maintenance',
+          'Utility Interruption',
+          'Safety Inspection',
+          'Facility Works',
+          'General Announcement',
+          'Pest Control',
+          'Power Outage',
+          'Others',
+        ],
+        value: noticeTypeController.text.isEmpty ? null : noticeTypeController.text,
+        onChanged: (v) => setState(() => noticeTypeController.text = v ?? ''),
+        isRequired: _submitted,
+        requiredMessage: 'Notice type is required.',
+        hintText: 'Select notice type',
+        otherController: noticeTypeOtherController,
+      ),
 
-          DropdownField<String>(
-            label: 'Location',
-            value: locationValue,
-            items: ['Lobby', 'Gate', 'Pool'],
-            onChanged: (newValue) {
-              setState(() => locationValue = newValue);
-            },
-            isRequired: true,
-            otherController: otherPriorityController,
-          ),
 
-          InputField(label: 'Description', controller: descriptionController, hintText: 'Enter task description', isRequired: true),
+      // Description
+      InputField(
+        label: 'Description / Message Body',
+        controller: descriptionController,
+        hintText: 'Enter announcement details',
+        isRequired: true,
+        maxLines: 4,
+      ),
+      if (_submitted) _errorCaption(_errDescription()),
 
-          const SizedBox(height: 8),
-          const Text('Task Checklist', style: TextStyle(fontWeight: FontWeight.bold)),
-          ...List.generate(
-            checklistControllers.length,
-            (index) => Row(
-              children: [
-                Expanded(
-                  child: InputField(
-                    label: 'Checklist ${index + 1}',
-                    controller: checklistControllers[index],
-                    hintText: 'Enter checklist item',
-                    isRequired: true,
-                  ),
+      const SizedBox(height: 8),
+
+      // Location
+      InputField(
+        label: 'Location (Affected Area)',
+        controller: locationController,
+        hintText: 'Enter location',
+        isRequired: true,
+      ),
+      if (_submitted) _errorCaption(_errLocation()),
+
+      const SizedBox(height: 12),
+
+      const Text('Schedule Visibility (Optional)',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+
+      Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTap: _pickVisibilityFrom,
+              child: AbsorbPointer(
+                child: InputField(
+                  label: 'From',
+                  controller: scheduleVisibilityFromController,
+                  hintText: 'Select date & time',
+                  isRequired: false, 
+                  suffixIcon: const Icon(Icons.calendar_today_rounded,
+                      size: 20, color: Color(0xFF005CE7)),
                 ),
-                IconButton(
-                  onPressed: () => removeChecklistItem(index),
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                )
-              ],
+              ),
             ),
           ),
-          ElevatedButton.icon(
-            onPressed: addChecklistItem,
-            icon: const Icon(Icons.add),
-            label: const Text('Add Checklist Item'),
-          ),
-        ];
-
-      case 'Assign & Schedule Work':
-        return [
-          const SizedBox(height: 8),
-          const Text('Schedule & Assignment', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-
-          DropdownField<String>(
-            label: 'Recurring Interval',
-            value: recurringValue,
-            items: ['1 week', '1 month', '3 months', '1 year', 'Others'],
-            onChanged: (value) => setState(() => recurringValue = value),
-            otherController: otherPriorityController,
-            isRequired: true,
-          ),
-
-          InputField(label: 'Estimated Duration', controller: hoursController, hintText: 'In hours', isRequired: true,),
-          InputField(
-            controller: dateStartedController,
-            readOnly: true,
-              label: 'Start Date',
-              hintText: 'Pick start date',
-              suffixIcon: const Icon(Icons.calendar_today),
-              onTap: () async {
-                DateTime? pickedDate = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now(),
-                  firstDate: DateTime(1900),
-                  lastDate: DateTime.now(),
-                );
-                if (pickedDate != null) {
-                  dateStartedController.text =
-                      "${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}";
-                }
-              },  
+          const SizedBox(width: 12),
+          Expanded(
+            child: GestureDetector(
+              onTap: _pickVisibilityTo,
+              child: AbsorbPointer(
+                child: InputField(
+                  label: 'To',
+                  controller: scheduleVisibilityToController,
+                  hintText: 'Select date & time',
+                  isRequired: false,
+                  suffixIcon: const Icon(Icons.calendar_today_rounded,
+                      size: 20, color: Color(0xFF005CE7)),
+                ),
+              ),
             ),
-          InputField(label: 'Due Date', controller: dueDateController, hintText: 'Auto-calculated', readOnly: true),
-
-          DropdownField<String>(
-            label: 'Department',
-            value: departmentValue,
-            items: ['Maintenance', 'Plumbing', 'Electrical', 'Carpentry', 'Others'],
-            onChanged: (value) => setState(() => departmentValue = value),
-            otherController: otherPriorityController,
-            isRequired: true,
           ),
+        ],
+      ),
+      if (_submitted) _errorCaption(_errSchedule()),
 
-          DropdownField<String>(
-            label: 'Assign Staff',
-            value: staffValue,
-            items: ['Juan Dela Cruz', 'Anna Marie', 'Pedro Santos'],
-            onChanged: (value) => setState(() => staffValue = value),
-            isRequired: true,
+      const SizedBox(height: 8),
+
+      // Posting (optional)
+      GestureDetector(
+        onTap: _pickPosting,
+        child: AbsorbPointer(
+          child: InputField(
+            label: 'Schedule Posting (Optional)',
+            controller: schedulePostingController,
+            hintText: 'Select date & time (optional)',
+            isRequired: false,
+            suffixIcon: const Icon(Icons.calendar_today_rounded,
+                size: 20, color: Color(0xFF005CE7)),
           ),
+        ),
+      ),
+      if (_submitted) _errorCaption(_errPosting()),
 
-          FileAttachmentPicker(label: 'Upload Attachment'),
-
-          const SizedBox(height: 8),
-          const Text('Remarks', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-
-          InputField(label: 'Remarks / Notes', controller: remarksController, hintText: 'Enter remarks', isRequired: false),
-
-          const Text('Notifications', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-
-          DropdownField<String>(
-            label: 'Admin Notifications',
-            items: notificationOptions,
-            values: adminNotifTime,
-            onChangedMulti: (vals) => setState(() => adminNotifTime = vals),
-            isMultiSelect: true,
-            isRequired: true,
-          ),
-
-          DropdownField<String>(
-            label: 'Staff Notifications',
-            items: notificationOptions,
-            values: staffNotifTime, 
-            onChangedMulti: (vals) => setState(() => staffNotifTime = vals),
-            isMultiSelect: true,
-            isRequired: true,
-          ),
-
-          InputField(
-            label: 'Availability',
-            controller: availabilityController,
-            hintText: 'Select preferred date & time',
-            readOnly: true,
-            suffixIcon: const Icon(Icons.calendar_today),
-            onTap: () => _selectDateTime(context),
-          ),
-        ];
-
-      default:
-        return [const Text('Invalid request type')];
-    }
+      const SizedBox(height: 8),
+    ];
   }
 
+  // ---------------- Submit ----------------
+  void _onSubmit() {
+    _submitted = true;
+
+    _formKey.currentState?.validate();
+    setState(() {}); // refresh captions
+
+    if (_hasAnyError()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fix the highlighted fields.')),
+      );
+      return;
+    }
+
+    _showRequestDialog(context);
+  }
+
+  void _showRequestDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => CustomPopup(
+        title: 'Success',
+        message:
+            'Your ${widget.requestType.toLowerCase()} has been submitted successfully and is now listed under Announcements.',
+        primaryText: 'Go to Announcements',
+        onPrimaryPressed: () {
+          Navigator.of(context).pop();
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const AnnouncementPage()),
+          );
+        },
+      ),
+    );
+  }
+
+  // ---------------- Bottom Submit Bar ----------------
+  Widget _buildBottomSubmitBar() {
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Color(0xFFE5E7EB))),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+        child: SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: FilledButton(
+            label: 'Submit',
+            backgroundColor: const Color(0xFF005CE7),
+            textColor: Colors.white,
+            withOuterBorder: false,
+            onPressed: _onSubmit,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------- Build ----------------
   @override
   Widget build(BuildContext context) {
+    final autovalidate =
+        _submitted ? AutovalidateMode.always : AutovalidateMode.disabled;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: CustomAppBar(
-        leading: Row(
-          children: const [
-            BackButton(),
-            SizedBox(width: 8),
-            Text('New Announcement'),
-          ],
-        ),
+        title: 'New Announcement',
+        leading: Row(children: const [BackButton(), SizedBox(width: 8)]),
       ),
       body: SafeArea(
         child: Column(
@@ -305,34 +416,20 @@ class _AnnouncementFormState extends State<AnnouncementForm> {
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ...getFormFields(),
-                    const SizedBox(height: 80),
-                  ],
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: autovalidate,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ..._formFields(),
+                      const SizedBox(height: 80),
+                    ],
+                  ),
                 ),
               ),
             ),
-              FilledButton(
-              label: widget.requestType == 'Assign & Schedule Work' ? "Submit" : "Next",
-              onPressed: () {
-                if (widget.requestType == 'Assign & Schedule Work') {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Form submitted successfully!')),
-                  );
-                  Navigator.pop(context);
-                } else {
-                  // Go to Assign & Schedule Work page
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AnnouncementForm(requestType: 'Assign & Schedule Work'),
-                    ),
-                  );
-                }
-              },
-            ),
+            _buildBottomSubmitBar(),
           ],
         ),
       ),
