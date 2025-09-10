@@ -1,10 +1,10 @@
+import 'package:facilityfix/widgets/forgotPassword.dart';
 import 'package:flutter/material.dart';
-
-// Pages
-import 'package:facilityfix/landingpage/forgot_password.dart';
+import 'package:flutter/services.dart';
 import 'package:facilityfix/tenant/home.dart' as Tenant;
 import 'package:facilityfix/staff/home.dart' as Staff;
 import 'package:facilityfix/admin/home.dart' as Admin;
+import 'package:facilityfix/widgets/forms.dart'; 
 
 class LogIn extends StatefulWidget {
   final String role; // 'tenant' | 'staff' | 'admin'
@@ -22,6 +22,12 @@ class _LogInState extends State<LogIn> {
   final passwordController = TextEditingController();
   final buildingController = TextEditingController();
 
+  // External error captions for InputField (drive red border + custom caption)
+  String? _emailErr;
+  String? _idErr;
+  String? _buildingErr;
+  String? _passwordErr;
+
   bool _obscurePassword = true;
 
   @override
@@ -33,13 +39,69 @@ class _LogInState extends State<LogIn> {
     super.dispose();
   }
 
-  void _handleLogin() {
-    if (!_formKey.currentState!.validate()) return;
+  String get _normalizedRole => widget.role.toLowerCase();
+  bool get _isTenant => _normalizedRole == 'tenant';
+  bool get _isStaff  => _normalizedRole == 'staff';
+  bool get _isAdmin  => _normalizedRole == 'admin';
 
-    final role = widget.role.toLowerCase();
+  String get _idLabel {
+    if (_isTenant) return 'Tenant ID';
+    if (_isStaff)  return 'Staff ID';
+    if (_isAdmin)  return 'Admin ID';
+    return 'ID';
+    }
+
+  bool _validate() {
+    // clear old errors
+    _emailErr = null;
+    _idErr = null;
+    _buildingErr = null;
+    _passwordErr = null;
+
+    final email = emailController.text.trim();
+    final id = idController.text.trim();
+    final building = buildingController.text.trim();
+    final pass = passwordController.text;
+
+    // Required check via built-in validator on InputField (isRequired:true)
+    // but we also set external captions for specific messages:
+    final emailRe = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$');
+
+    if (email.isEmpty) {
+      _emailErr = 'Email is required.';
+    } else if (!emailRe.hasMatch(email)) {
+      _emailErr = 'Enter a valid email address.';
+    }
+
+    if (id.isEmpty) {
+      _idErr = '$_idLabel is required.';
+    }
+
+    if (_isTenant && building.isEmpty) {
+      _buildingErr = 'Building & Unit No. is required.';
+    }
+
+    if (pass.isEmpty) {
+      _passwordErr = 'Password is required.';
+    } else if (pass.length < 6) {
+      _passwordErr = 'Password must be at least 6 characters.';
+    }
+
+    // Trigger Form validators (for red borders on required fields)
+    _formKey.currentState?.validate();
+
+    setState(() {}); // refresh error captions
+    return _emailErr == null &&
+        _idErr == null &&
+        _buildingErr == null &&
+        _passwordErr == null;
+  }
+
+  void _handleLogin() {
+    if (!_validate()) return;
 
     Widget destination;
-    switch (role) {
+    switch (_normalizedRole) {
       case 'tenant':
         destination = const Tenant.HomePage();
         break;
@@ -54,30 +116,32 @@ class _LogInState extends State<LogIn> {
         break;
     }
 
-    // Replace the modal with the destination
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => destination),
     );
   }
 
+  void _openForgotPassword() {
+    // Uses your ForgotPasswordEmailModal + sticky banner utilities
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => const ForgotPasswordEmailModal(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    const inputPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 12);
-    const borderStyle = OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(12)),
-      borderSide: BorderSide(color: Color(0xFFE5E6E8), width: 1),
-    );
     const hintTextStyle = TextStyle(
       color: Color(0xFF818181),
       fontSize: 14,
       fontFamily: 'Inter',
       fontWeight: FontWeight.w500,
     );
-
-    final isTenant = widget.role.toLowerCase() == 'tenant';
-    final isStaff = widget.role.toLowerCase() == 'staff';
-    final isAdmin = widget.role.toLowerCase() == 'admin';
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -116,7 +180,6 @@ class _LogInState extends State<LogIn> {
                         ),
                         const SizedBox(height: 24),
 
-                        // Form with validation
                         Form(
                           key: _formKey,
                           child: Padding(
@@ -125,187 +188,105 @@ class _LogInState extends State<LogIn> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 // Email
-                                TextFormField(
+                                InputField(
+                                  label: 'Email',
+                                  hintText: 'you@example.com',
                                   controller: emailController,
                                   keyboardType: TextInputType.emailAddress,
-                                  textInputAction: TextInputAction.next,
-                                  decoration: const InputDecoration(
-                                    hintText: "Email",
-                                    hintStyle: hintTextStyle,
-                                    filled: true,
-                                    fillColor: Colors.white,
-                                    contentPadding: inputPadding,
-                                    border: borderStyle,
-                                    enabledBorder: borderStyle,
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Email is required';
-                                    }
-                                    final emailRe = RegExp(r'^[\w\.-]+@([\w-]+\.)+[\w-]{2,}$');
-                                    if (!emailRe.hasMatch(value.trim())) {
-                                      return 'Enter a valid email';
-                                    }
-                                    return null;
-                                  },
+                                  isRequired: true,
+                                  errorText: _emailErr,
+                                  prefixIcon: const Icon(Icons.mail, color: Color(0xFF98A2B3)),
                                 ),
-                                const SizedBox(height: 16),
 
                                 // Role-specific fields
-                                if (isTenant) ...[
-                                  TextFormField(
+                                if (_isTenant) ...[
+                                  InputField(
+                                    label: _idLabel,
+                                    hintText: 'e.g., T-000123',
                                     controller: idController,
-                                    textInputAction: TextInputAction.next,
-                                    decoration: const InputDecoration(
-                                      hintText: "Tenant ID",
-                                      hintStyle: hintTextStyle,
-                                      filled: true,
-                                      fillColor: Colors.white,
-                                      contentPadding: inputPadding,
-                                      border: borderStyle,
-                                      enabledBorder: borderStyle,
-                                    ),
-                                    validator: (value) =>
-                                        (value == null || value.isEmpty) ? 'Tenant ID is required' : null,
+                                    isRequired: true,
+                                    errorText: _idErr,
+                                    prefixIcon: const Icon(Icons.badge_outlined, color: Color(0xFF98A2B3)),
                                   ),
-                                  const SizedBox(height: 16),
-                                  TextFormField(
+                                  InputField(
+                                    label: 'Building & Unit No.',
+                                    hintText: 'e.g., Tower A – 10F – 10B',
                                     controller: buildingController,
-                                    textInputAction: TextInputAction.next,
-                                    decoration: const InputDecoration(
-                                      hintText: "Building & Unit No.",
-                                      hintStyle: hintTextStyle,
-                                      filled: true,
-                                      fillColor: Colors.white,
-                                      contentPadding: inputPadding,
-                                      border: borderStyle,
-                                      enabledBorder: borderStyle,
-                                    ),
-                                    validator: (value) => (value == null || value.isEmpty)
-                                        ? 'Building & Unit No. is required'
-                                        : null,
+                                    isRequired: true,
+                                    errorText: _buildingErr,
+                                    prefixIcon: const Icon(Icons.location_city_outlined, color: Color(0xFF98A2B3)),
                                   ),
-                                  const SizedBox(height: 16),
-                                ] else if (isStaff) ...[
-                                  TextFormField(
+                                ] else ...[
+                                  InputField(
+                                    label: _idLabel,
+                                    hintText: _isStaff ? 'e.g., S-000321' : 'e.g., ADM-0001',
                                     controller: idController,
-                                    textInputAction: TextInputAction.next,
-                                    decoration: const InputDecoration(
-                                      hintText: "Staff ID",
-                                      hintStyle: hintTextStyle,
-                                      filled: true,
-                                      fillColor: Colors.white,
-                                      contentPadding: inputPadding,
-                                      border: borderStyle,
-                                      enabledBorder: borderStyle,
-                                    ),
-                                    validator: (value) =>
-                                        (value == null || value.isEmpty) ? 'Staff ID is required' : null,
+                                    isRequired: true,
+                                    errorText: _idErr,
+                                    prefixIcon: const Icon(Icons.badge_outlined, color: Color(0xFF98A2B3)),
                                   ),
-                                  const SizedBox(height: 16),
-                                ] else if (isAdmin) ...[
-                                  TextFormField(
-                                    controller: idController,
-                                    textInputAction: TextInputAction.next,
-                                    decoration: const InputDecoration(
-                                      hintText: "Admin ID",
-                                      hintStyle: hintTextStyle,
-                                      filled: true,
-                                      fillColor: Colors.white,
-                                      contentPadding: inputPadding,
-                                      border: borderStyle,
-                                      enabledBorder: borderStyle,
-                                    ),
-                                    validator: (value) =>
-                                        (value == null || value.isEmpty) ? 'Admin ID is required' : null,
-                                  ),
-                                  const SizedBox(height: 16),
                                 ],
 
                                 // Password
-                                TextFormField(
+                                InputField(
+                                  label: 'Password',
+                                  hintText: 'Enter your password',
                                   controller: passwordController,
+                                  isRequired: true,
                                   obscureText: _obscurePassword,
-                                  textInputAction: TextInputAction.done,
-                                  decoration: InputDecoration(
-                                    hintText: "Password",
-                                    hintStyle: hintTextStyle,
-                                    filled: true,
-                                    fillColor: Colors.white,
-                                    contentPadding: inputPadding,
-                                    border: borderStyle,
-                                    enabledBorder: borderStyle,
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
+                                  errorText: _passwordErr,
+                                  prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF98A2B3)),
+                                  suffixIcon: Padding(
+                                    padding: const EdgeInsets.only(right: 4), // 4px space from border
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.translucent, // still clickable
+                                      onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                                      child: Icon(
                                         _obscurePassword ? Icons.visibility_off : Icons.visibility,
                                         color: const Color(0xFF818181),
                                       ),
-                                      onPressed: () {
-                                        setState(() => _obscurePassword = !_obscurePassword);
-                                      },
                                     ),
                                   ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Password is required';
-                                    }
-                                    if (value.length < 6) {
-                                      return 'Password must be at least 6 characters';
-                                    }
-                                    return null;
-                                  },
-                                  onFieldSubmitted: (_) => _handleLogin(),
                                 ),
                               ],
                             ),
                           ),
                         ),
+                        const SizedBox(height: 8),
 
                         // Login Button
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const SizedBox(height: 24),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF818181),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF005CE7), // brand blue background
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                onPressed: _handleLogin,
-                                child: const Text(
-                                  'Log In',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                elevation: 0, // keep it flat & modern
+                              ),
+                              onPressed: _handleLogin,
+                              child: const Text(
+                                'Log In',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white, // white text for contrast
                                 ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
 
-                        // Forgot Password
+                        // Forgot Password (opens your bottom-sheet flow)
                         GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              PageRouteBuilder(
-                                opaque: false,
-                                transitionDuration: Duration.zero,
-                                reverseTransitionDuration: Duration.zero,
-                                pageBuilder: (context, animation, secondaryAnimation) =>
-                                    const ForgotPassword(),
-                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                  return child;
-                                },
-                              ),
-                            );
-                          },
+                          onTap: _openForgotPassword,
                           child: const Text(
                             'I forgot my password',
                             style: TextStyle(
