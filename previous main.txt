@@ -1,0 +1,127 @@
+import os, csv, re
+from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from langdetect import detect
+import torch
+from transformers import AutoTokenizer, RobertaConfig, RobertaForSequenceClassification
+from .core.config import USE_GROQ
+from .services.groq_translate import translate_one
+from pydantic import BaseModel##
+
+app = FastAPI(title="FacilityFix Inference API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+from .core.config import USE_GROQ, GROQ_MODEL, GROQ_API_KEY
+
+@app.get("/health")
+def health():
+    return {
+        "use_groq": USE_GROQ,
+        "groq_model": GROQ_MODEL,
+        "groq_key_present": bool(GROQ_API_KEY),
+        "groq_key_endswith": (GROQ_API_KEY[-4:] if GROQ_API_KEY else None)
+    }
+
+class _TIn(BaseModel): ##
+    text: str
+
+@app.post("/_translate_only")
+def _translate_only(body: _TIn):
+    out = translate_one(body.text)
+    return {"in": body.text, "out": out} ##
+
+
+MODEL_PATH = "models/facilityfix-ai"
+
+# label spaces
+CATEGORIES = ["electrical", "hvac", "masonry", "plumbing", "carpentry", "pest control"]
+URGENCIES  = ["low", "medium", "high"]
+NUM_CAT = len(CATEGORIES)
+NUM_URG = len(URGENCIES)
+NUM_LABELS = NUM_CAT + NUM_URG  # concatenated multitask head → 9
+
+# tokenizer should load fine from your folder
+tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH)
+
+# IMPORTANT: build a Roberta config manually (since your config.json is custom)
+id2label = {i: f"cat_{i}" for i in range(NUM_LABELS)}  # placeholders; we split logits ourselves
+label2id = {v: k for k, v in id2label.items()}
+
+hf_config = RobertaConfig.from_pretrained(
+    "roberta-base",
+    num_labels=NUM_LABELS,
+    id2label=id2label,
+    label2id=label2id,
+    problem_type="single_label_classification"
+)
+
+# load weights from your folder using this Roberta config
+# if you see a mismatch error, add ignore_mismatched_sizes=True
+model = RobertaForSequenceClassification.from_pretrained(
+    MODEL_PATH,
+    config=hf_config,
+)
+
+class PredictIn(BaseModel):
+    description: str
+
+class PredictOut(BaseModel):
+    original_text: str
+    processed_text: str
+    detected_language: str
+    translated: bool
+    category: str
+    urgency: str
+
+def _detect(text: str) -> str:
+    try:
+        return detect(text)
+    except Exception:
+        return "en"
+
+@app.post("/predict", response_model=PredictOut)
+def predict(inp: PredictIn):
+    original = inp.description.strip()
+    lang = _detect(original)
+
+    processed = original
+    translated = False
+    if lang == "tl" and USE_GROQ:
+        try:
+            processed = translate_one(original) or original
+            translated = True
+        except Exception as e:
+            print(f"[Predict] Falling back to original (Groq failed): {e}")
+            processed = original
+            translated = False
+
+    inputs = tokenizer(processed, return_tensors="pt", truncation=True)
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    # Multitask concatenated logits: [batch, 9] → first 6 = category, last 3 = urgency
+    logits = outputs.logits  # [1, 9]
+    cat_logits = logits[:, :NUM_CAT]
+    urg_logits = logits[:, NUM_CAT:]
+
+    cat_id = int(cat_logits.argmax(dim=-1).item())
+    urg_id = int(urg_logits.argmax(dim=-1).item())
+
+    category = CATEGORIES[cat_id]
+    urgency  = "high" if category == "pest control" else URGENCIES[urg_id]
+
+    return PredictOut(
+        original_text=original,
+        processed_text=processed,
+        detected_language=lang,
+        translated=translated,
+        category=category,
+        urgency=urgency,
+    )
