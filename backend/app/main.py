@@ -222,8 +222,8 @@ def predict(inp: PredictIn, force_translate: bool = Query(False)):
     urgency  = URGENCIES[urg_id]
 
     # Business rule (keep if required by prof): pest control is always HIGH
-    if category_l == "pest control":
-        urgency = "high"
+    #if category_l == "pest control":
+        #urgency = "high"
 
     return PredictOut(
         original_text=original,
