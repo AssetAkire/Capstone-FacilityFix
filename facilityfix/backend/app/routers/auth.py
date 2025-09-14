@@ -237,7 +237,7 @@ async def generate_test_token(login_data: UserLogin):
             detail=f"Token generation failed: {str(e)}"
         )
 
-"""
+
 @router.post("/exchange-token")
 async def exchange_custom_token_for_id_token(login_data: UserLogin):
     
@@ -322,7 +322,6 @@ async def exchange_custom_token_for_id_token(login_data: UserLogin):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Token exchange failed: {str(e)}"
         )
-"""
         
 @router.get("/me")
 async def get_current_user_info(current_user: dict = Depends(get_current_user)):

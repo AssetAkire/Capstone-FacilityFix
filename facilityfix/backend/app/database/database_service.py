@@ -1,8 +1,9 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Sequence, Tuple
 from .firestore_client import get_firestore_client
 from .schema_validator import schema_validator
 from .collections import COLLECTIONS
 from datetime import datetime
+import anyio
 
 class DatabaseService:
     """High-level database service with validation and error handling"""
@@ -11,6 +12,17 @@ class DatabaseService:
         self.client = get_firestore_client()
         if not self.client:
             raise Exception("Firestore client not available")
+        
+    # ── helper: try to get a raw Firestore client that supports .collection() ──
+    def _raw_firestore(self):
+        for attr in ("db", "client", "_client"):
+            raw = getattr(self.client, attr, None)
+            if raw is not None and hasattr(raw, "collection"):
+                return raw
+        # Some wrappers *are* the raw client already
+        if hasattr(self.client, "collection"):
+            return self.client
+        return None
     
     async def create_document(self, collection: str, data: Dict[str, Any], 
                             document_id: str = None, validate: bool = True) -> tuple[bool, str, Optional[str]]:
@@ -111,34 +123,65 @@ class DatabaseService:
     
     async def query_collection(self, collection: str, filters: List[tuple] = None, 
                              limit: int = None) -> tuple[bool, List[Dict[str, Any]], Optional[str]]:
-        """
-        Query a collection with filters
-        
-        Returns:
-            Tuple of (success, documents, error_message)
-        """
-        try:
-            documents = self.client.get_collection(collection, filters, limit)
-            return True, documents, None
-            
-        except Exception as e:
-            error_msg = f"Failed to query collection {collection}: {str(e)}"
-            return False, [], error_msg
+        """Query a collection with filters (delegates to query_documents)."""
+        return await self.query_documents(collection, filters, limit)
     
     async def query_documents(self, collection: str, filters: List[tuple] = None, 
                             limit: int = None) -> tuple[bool, List[Dict[str, Any]], Optional[str]]:
         """
-        Query documents in a collection with filters (alias for query_collection)
-        
-        Args:
-            collection: Collection name
-            filters: List of filter tuples (field, operator, value)
-            limit: Maximum number of documents to return
-            
-        Returns:
-            Tuple of (success, documents, error_message)
+        Query documents in a collection.
+
+        filters: list of tuples. Each tuple can be:
+          - (field, value) -> uses '=='
+          - (field, op, value) -> explicit operator (==, >, >=, <, <=, array_contains, in, etc.)
+        limit: optional max number of docs.
+        Returns: (success, [docs], error). Each doc includes '_doc_id'.
         """
-        return await self.query_collection(collection, filters, limit)
+        raw = self._raw_firestore()
+
+        # If we can reach the raw client, use it (fastest & includes doc ids)
+        if raw is not None:
+            def _run():
+                q = raw.collection(collection)
+                if filters:
+                    for f in filters:
+                        if len(f) == 3:
+                            field, op, value = f
+                        elif len(f) == 2:
+                            field, value = f
+                            op = "=="
+                        else:
+                            raise ValueError("Invalid filter tuple format")
+                        q = q.where(field, op, value)
+                if limit:
+                    q = q.limit(limit)
+                # stream() yields DocumentSnapshot; add Firestore doc id
+                out = []
+                for snap in q.stream():
+                    data = snap.to_dict() or {}
+                    data["_doc_id"] = snap.id
+                    out.append(data)
+                return out
+
+            try:
+                docs = await anyio.to_thread.run_sync(_run)
+                return True, docs, None
+            except Exception as e:
+                return False, [], f"Failed to query {collection}: {e}"
+
+        # Fallback: use your wrapper's get_collection()
+        try:
+            documents = self.client.get_collection(collection, filters, limit)
+            # Best-effort: ensure a _doc_id field if wrapper returns an 'id'
+            normalized = []
+            for d in documents or []:
+                if isinstance(d, dict):
+                    if "_doc_id" not in d and "id" in d:
+                        d = {**d, "_doc_id": d["id"]}
+                normalized.append(d)
+            return True, normalized, None
+        except Exception as e:
+            return False, [], f"Failed to query collection {collection}: {e}"
     
     async def get_building_data(self, building_id: str) -> tuple[bool, Dict[str, Any], Optional[str]]:
         """

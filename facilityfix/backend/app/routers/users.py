@@ -7,7 +7,7 @@ from ..database.database_service import database_service
 from ..database.collections import COLLECTIONS
 from ..auth.firebase_auth import firebase_auth
 from pydantic import BaseModel, EmailStr
-from datetime import datetime
+from datetime import datetime, timezone
 
 router = APIRouter(prefix="/users", tags=["user-management"])
 
@@ -79,32 +79,48 @@ async def get_user(
     user_id: str,
     current_user: dict = Depends(require_staff_or_admin)
 ):
-    """Get a specific user by ID"""
+    """Get a specific user whose user_id == {user_id} (e.g., T-0001)."""
     try:
-        # Get user from Firestore
+        # 1) Try direct doc-id (in case a doc is actually named T-0001)
         success, user_data, error = await database_service.get_document(
-            COLLECTIONS['users'], 
-            user_id
+            COLLECTIONS["users"], user_id
         )
-        
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"User not found: {error}"
+
+        # 2) If not found by doc-id, query by the "user_id" field
+        if not success or not user_data:
+            q_success, docs, q_error = await database_service.query_documents(
+                COLLECTIONS["users"],
+                filters=[("user_id", "==", user_id)],
+                limit=1,
             )
-        
-        # Get Firebase Auth data
+            if not q_success or not docs:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"User not found: Document '{user_id}' or field user_id == '{user_id}' not found in 'users'"
+                )
+            user_data = docs[0]
+
+        # (Optional) include Firestore doc id if your wrapper returns it
+        # user_data.setdefault("_doc_id", user_data.get("_doc_id"))
+
+        # Attach Firebase Auth info (by email first, fallback to Firebase UID in 'id')
         try:
-            firebase_user = await firebase_auth.get_user_by_email(user_data.get('email', ''))
-            if firebase_user:
-                user_data['firebase_uid'] = firebase_user.uid
-                user_data['email_verified'] = firebase_user.email_verified
-                user_data['last_sign_in'] = firebase_user.user_metadata.last_sign_in_time
-        except:
+            fb_user = None
+            email = user_data.get("email")
+            if email:
+                fb_user = await firebase_auth.get_user_by_email(email)
+            elif user_data.get("id"):  # your doc stores Firebase UID in 'id'
+                fb_user = await firebase_auth.get_user(user_data["id"])
+
+            if fb_user:
+                user_data["firebase_uid"] = fb_user.uid
+                user_data["email_verified"] = fb_user.email_verified
+                user_data["last_sign_in"] = getattr(fb_user.user_metadata, "last_sign_in_time", None)
+        except Exception:
             pass  # Firebase data is optional
-        
+
         return user_data
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -117,42 +133,90 @@ async def get_user(
 async def update_user(
     user_id: str,
     user_update: UserUpdate,
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin),
 ):
-    """Update user profile information"""
+    """Update the user whose `user_id` == {user_id} (e.g., T-0001)."""
     try:
-        # Prepare update data
+        # Build update payload from provided fields only
         update_data = {}
         if user_update.first_name is not None:
-            update_data['first_name'] = user_update.first_name
+            update_data["first_name"] = user_update.first_name
         if user_update.last_name is not None:
-            update_data['last_name'] = user_update.last_name
+            update_data["last_name"] = user_update.last_name
         if user_update.phone_number is not None:
-            update_data['phone_number'] = user_update.phone_number
+            update_data["phone_number"] = user_update.phone_number
         if user_update.department is not None:
-            update_data['department'] = user_update.department
+            update_data["department"] = user_update.department
         if user_update.building_id is not None:
-            update_data['building_id'] = user_update.building_id
+            update_data["building_id"] = user_update.building_id
         if user_update.unit_id is not None:
-            update_data['unit_id'] = user_update.unit_id
-        
-        update_data['updated_at'] = datetime.utcnow()
-        
-        # Update user in Firestore
-        success, error = await database_service.update_document(
-            COLLECTIONS['users'],
-            user_id,
-            update_data
+            update_data["unit_id"] = user_update.unit_id
+
+        if not update_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields provided to update."
+            )
+
+        update_data["updated_at"] = datetime.now(timezone.utc)
+
+        # ── Resolve the actual Firestore document id ───────────────────────────
+        target_doc_id = None
+
+        # 1) If a document is literally named T-0001, allow updating it
+        by_id_ok, by_id_doc, _ = await database_service.get_document(
+            COLLECTIONS["users"], user_id
         )
-        
+        if by_id_ok and by_id_doc:
+            target_doc_id = user_id
+        else:
+            # 2) Otherwise query by the 'user_id' field
+            q_ok, docs, q_err = await database_service.query_documents(
+                COLLECTIONS["users"],
+                filters=[("user_id", "==", user_id)],
+                limit=2,
+            )
+            if not q_ok:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Query failed: {q_err}"
+                )
+            if not docs:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"User not found for user_id '{user_id}'."
+                )
+            if len(docs) > 1:
+                # Safety: enforce uniqueness of user_id before writing
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Multiple users found with user_id '{user_id}'. Please resolve duplicates."
+                )
+
+            target_doc_id = docs[0].get("_doc_id") or docs[0].get("id")
+            if not target_doc_id:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="Resolved user document has no Firestore id."
+                )
+
+        # ── Perform the update using the resolved doc id ───────────────────────
+        success, error = await database_service.update_document(
+            COLLECTIONS["users"], target_doc_id, update_data
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to update user: {error}"
             )
-        
-        return {"message": "User updated successfully", "user_id": user_id}
-        
+
+        return {
+            "message": "User updated successfully",
+            "user_id": user_id,
+            "doc_id": target_doc_id,
+            "updated_fields": list(update_data.keys()),
+        }
+
     except HTTPException:
         raise
     except Exception as e:
@@ -161,45 +225,70 @@ async def update_user(
             detail=f"Error updating user: {str(e)}"
         )
 
+
 @router.patch("/{user_id}/status")
 async def update_user_status(
     user_id: str,
     status_update: UserStatusUpdate,
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin),
 ):
-    """Update user status (active, suspended, inactive)"""
+    """Update user status (active, suspended, inactive) for the user whose user_id == {user_id}."""
     try:
-        valid_statuses = ['active', 'suspended', 'inactive']
+        valid_statuses = {"active", "suspended", "inactive"}
         if status_update.status not in valid_statuses:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status. Must be one of: {valid_statuses}"
+                detail=f"Invalid status. Must be one of: {sorted(valid_statuses)}"
             )
-        
-        update_data = {
-            'status': status_update.status,
-            'updated_at': datetime.utcnow()
-        }
-        
-        # Update user status in Firestore
-        success, error = await database_service.update_document(
-            COLLECTIONS['users'],
-            user_id,
-            update_data
+
+        # Resolve the actual Firestore document id
+        target_doc_id = None
+        user_doc = None
+
+        by_id_ok, by_id_doc, _ = await database_service.get_document(
+            COLLECTIONS["users"], user_id
         )
-        
+        if by_id_ok and by_id_doc:
+            target_doc_id = user_id
+            user_doc = by_id_doc
+        else:
+            q_ok, docs, q_err = await database_service.query_documents(
+                COLLECTIONS["users"], filters=[("user_id", "==", user_id)], limit=2
+            )
+            if not q_ok:
+                raise HTTPException(status_code=500, detail=f"Query failed: {q_err}")
+            if not docs:
+                raise HTTPException(status_code=404, detail=f"User not found for user_id '{user_id}'.")
+            if len(docs) > 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Multiple users found with user_id '{user_id}'. Please resolve duplicates."
+                )
+            user_doc = docs[0]
+            target_doc_id = user_doc.get("_doc_id") or user_doc.get("id")
+
+        update_data = {
+            "status": status_update.status,
+            "updated_at": datetime.now(timezone.utc),
+        }
+
+        success, err = await database_service.update_document(
+            COLLECTIONS["users"], target_doc_id, update_data
+        )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to update user status: {error}"
+                detail=f"Failed to update user status: {err}"
             )
-        
+
         return {
             "message": f"User status updated to {status_update.status}",
             "user_id": user_id,
-            "new_status": status_update.status
+            "doc_id": target_doc_id,
+            "previous_status": user_doc.get("status") if isinstance(user_doc, dict) else None,
+            "new_status": status_update.status,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -212,51 +301,78 @@ async def update_user_status(
 async def delete_user(
     user_id: str,
     permanent: bool = Query(False, description="Permanently delete user (default: deactivate)"),
-    current_user: dict = Depends(require_admin)
+    current_user: dict = Depends(require_admin),
 ):
-    """Delete or deactivate a user"""
+    """Deactivate or permanently delete the user whose user_id == {user_id} (e.g., T-0001)."""
     try:
-        if permanent:
-            # Permanently delete user from Firestore
-            success, error = await database_service.delete_document(
-                COLLECTIONS['users'],
-                user_id
-            )
-            
-            if not success:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Failed to delete user: {error}"
-                )
-            
-            # Also delete from Firebase Auth if possible
-            try:
-                firebase_auth.delete_user(user_id)
-            except:
-                pass  # Firebase deletion is optional
-            
-            return {"message": "User permanently deleted", "user_id": user_id}
+        # ── Resolve Firestore doc id by doc-id first, then by user_id field ──
+        target_doc_id = None
+        user_doc = None
+
+        by_id_ok, by_id_doc, _ = await database_service.get_document(
+            COLLECTIONS["users"], user_id
+        )
+        if by_id_ok and by_id_doc:
+            target_doc_id = user_id
+            user_doc = by_id_doc
         else:
-            # Soft delete - just deactivate
-            update_data = {
-                'status': 'inactive',
-                'updated_at': datetime.utcnow()
-            }
-            
-            success, error = await database_service.update_document(
-                COLLECTIONS['users'],
-                user_id,
-                update_data
+            q_ok, docs, q_err = await database_service.query_documents(
+                COLLECTIONS["users"], filters=[("user_id", "==", user_id)], limit=2
             )
-            
+            if not q_ok:
+                raise HTTPException(status_code=500, detail=f"Query failed: {q_err}")
+            if not docs:
+                raise HTTPException(status_code=404, detail=f"User not found for user_id '{user_id}'.")
+            if len(docs) > 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Multiple users found with user_id '{user_id}'. Please resolve duplicates first."
+                )
+            user_doc = docs[0]
+            target_doc_id = user_doc.get("_doc_id") or user_doc.get("id")
+
+        # ── Permanent delete ───────────────────────────────────────────────────
+        if permanent:
+            success, err = await database_service.delete_document(
+                COLLECTIONS["users"], target_doc_id
+            )
             if not success:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Failed to deactivate user: {error}"
+                    detail=f"Failed to delete user: {err}"
                 )
-            
-            return {"message": "User deactivated", "user_id": user_id}
-        
+
+            # Best-effort: also delete from Firebase Auth (by UID or email)
+            try:
+                firebase_uid = user_doc.get("id")  # your schema stores Firebase UID in 'id'
+                if not firebase_uid and user_doc.get("email"):
+                    fb_user = await firebase_auth.get_user_by_email(user_doc["email"])
+                    if fb_user:
+                        firebase_uid = fb_user.uid
+                if firebase_uid:
+                    await firebase_auth.delete_user(firebase_uid)
+            except Exception:
+                # Firebase deletion is optional
+                pass
+
+            return {"message": "User permanently deleted", "user_id": user_id, "doc_id": target_doc_id}
+
+        # ── Soft delete (deactivate) ───────────────────────────────────────────
+        update_data = {
+            "status": "inactive",
+            "updated_at": datetime.now(timezone.utc),
+        }
+        success, err = await database_service.update_document(
+            COLLECTIONS["users"], target_doc_id, update_data
+        )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to deactivate user: {err}"
+            )
+
+        return {"message": "User deactivated", "user_id": user_id, "doc_id": target_doc_id}
+
     except HTTPException:
         raise
     except Exception as e:

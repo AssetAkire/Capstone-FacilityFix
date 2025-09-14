@@ -9,41 +9,62 @@ class ProfileService:
     def __init__(self):
         self.db = database_service
     
-    async def get_complete_profile(self, user_id: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+    async def get_complete_profile(self, user_ref: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        """
+        Fetch a profile by Firebase UID (doc id) OR by human user_id (e.g., T-0001).
+        Returns the Firestore profile enriched with Firebase Auth data and a completion score.
+        """
         try:
-            # Get Firestore profile
-            success, profile_data, error = await self.db.get_document(COLLECTIONS['users'], user_id)
-            
-            if not success:
-                return False, None, error
-            
-            # Get Firebase Auth data
+            # 1) Try treating user_ref as a Firestore document id (Firebase UID)
+            ok, profile_data, err = await self.db.get_document(COLLECTIONS["users"], user_ref)
+
+            # 2) If not found, resolve by the user_id field (e.g., T-0001)
+            if not ok or not profile_data:
+                q_ok, docs, q_err = await self.db.query_documents(
+                    COLLECTIONS["users"],
+                    filters=[("user_id", "==", user_ref)],
+                    limit=1,
+                )
+                if not q_ok:
+                    return False, None, q_err
+                if not docs:
+                    return False, None, f"Document {user_ref} not found in users"
+                profile_data = docs[0]  # includes _doc_id if your db wrapper adds it
+
+            # 3) Enrich with Firebase Auth info (prefer email, fallback to stored UID)
             try:
-                firebase_user = await firebase_auth.get_user_by_email(profile_data.get('email', ''))
-                if firebase_user:
+                fb_user = None
+                email = profile_data.get("email")
+                if email:
+                    fb_user = await firebase_auth.get_user_by_email(email)
+                elif profile_data.get("id"):  # Firebase UID stored in profile
+                    fb_user = await firebase_auth.get_user(profile_data["id"])
+
+                if fb_user:
                     profile_data.update({
-                        'firebase_uid': firebase_user.uid,
-                        'email_verified': firebase_user.email_verified,
-                        'last_sign_in': firebase_user.user_metadata.last_sign_in_time,
-                        'creation_time': firebase_user.user_metadata.creation_time,
-                        'provider_data': [
+                        "firebase_uid": fb_user.uid,
+                        "email_verified": getattr(fb_user, "email_verified", None),
+                        "last_sign_in": getattr(getattr(fb_user, "user_metadata", None), "last_sign_in_time", None),
+                        "creation_time": getattr(getattr(fb_user, "user_metadata", None), "creation_time", None),
+                        "provider_data": [
                             {
-                                'provider_id': provider.provider_id,
-                                'uid': provider.uid,
-                                'email': provider.email
-                            } for provider in firebase_user.provider_data
-                        ]
+                                "provider_id": getattr(p, "provider_id", None),
+                                "uid": getattr(p, "uid", None),
+                                "email": getattr(p, "email", None),
+                            }
+                            for p in getattr(fb_user, "provider_data", []) or []
+                        ],
                     })
             except Exception as e:
-                # Firebase data is optional
-                profile_data['firebase_error'] = str(e)
-            
-            # Calculate profile completion
+                # Firebase enrichment is optional
+                profile_data["firebase_error"] = str(e)
+
+            # 4) Compute completion score
             completion_score = self._calculate_profile_completion(profile_data)
-            profile_data['completion_score'] = completion_score
-            
+            profile_data["completion_score"] = completion_score
+
             return True, profile_data, None
-            
+
         except Exception as e:
             return False, None, f"Error retrieving complete profile: {str(e)}"
     

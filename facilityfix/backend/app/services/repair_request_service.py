@@ -9,26 +9,16 @@ class RepairRequestService:
         self.collection_name = "repair_requests"
 
     async def create_repair_request(self, repair_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a new repair request"""
         try:
-            # Add timestamps
-            repair_data["created_at"] = datetime.utcnow()
+            repair_data.setdefault("created_at", datetime.utcnow())
             repair_data["updated_at"] = datetime.utcnow()
-            
-            # Validate data using Pydantic model
             repair_request = RepairRequest(**repair_data)
-            
-            # Save to database
-            result = await self.db_service.create_document(
-                self.collection_name, 
-                repair_request.dict(exclude={"id"})
+            return await self.db_service.create_document(
+                self.collection_name, repair_request.dict(exclude={"id"})
             )
-            
-            return result
-            
         except Exception as e:
             raise Exception(f"Failed to create repair request: {str(e)}")
-
+                        
     async def get_repair_requests(self, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Get all repair requests with optional filters"""
         try:
