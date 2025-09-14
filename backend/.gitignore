@@ -1,0 +1,11 @@
+# Virtual env and caches
+venv/
+__pycache__/
+.env
+
+# Ignore model directories
+backend/models/facilityfix-ai/
+backend/models/facilityfix-multitask/
+
+# Ignore any model zips
+*.zip
