@@ -11,6 +11,7 @@ import 'package:facilityfix/tenant/workorder.dart';
 import 'package:facilityfix/widgets/app&nav_bar.dart';
 import 'package:facilityfix/widgets/forms.dart';
 import 'package:facilityfix/widgets/modals.dart';
+import 'package:facilityfix/widgets/forgotPassword.dart'; 
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -135,6 +136,19 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  // === Forgot Password: opens ForgotPasswordEmailModal ===
+  Future<void> _openForgotPasswordEmail() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => const ForgotPasswordEmailModal(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -229,6 +243,21 @@ class _ProfilePageState extends State<ProfilePage> {
                       prefixIcon: const Padding(
                         padding: EdgeInsets.all(8.0),
                         child: Icon(Icons.phone),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: _openForgotPasswordEmail,
+                        child: const Text(
+                          'Forgot password?',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF005CE7),
+                          ),
+                        ),
                       ),
                     ),
                   ],

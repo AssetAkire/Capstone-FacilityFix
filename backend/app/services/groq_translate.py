@@ -53,12 +53,23 @@ def _force_species(original_tl: str, eng: str) -> str:
             # If multiple species appear, prefer the one from the glossary for this sentence
     return e_out
 
+# =======
+
+# _client = Groq(api_key=GROQ_API_KEY)
+
+# _SYSTEM = (
+#     "You are a precise Tagalog-to-English translator for building maintenance tickets. "
+#     "Return only the English translation."
+# )
+
+# >>>>>>> test-branch-02
 def translate_one(text: str) -> str:
     try:
         resp = _client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[
                 {"role": "system", "content": _SYSTEM},
+# <<<<<<< test-branch-02
                 {"role": "user", "content": f"Translate to English. Output only the translation.\n\nText:\n{text}"},
             ],
             temperature=0.0,         # deterministic
@@ -71,3 +82,15 @@ def translate_one(text: str) -> str:
     except Exception as e:
         print(f"[Groq] translation error: {e}")
         raise
+# =======
+                {"role": "user", "content": f"Translate to English:\nTagalog: {text}\nEnglish:"}
+            ],
+            temperature=0.1,
+            max_tokens=200
+        )
+        return (resp.choices[0].message.content or "").strip()
+    except Exception as e:
+        print(f"[Groq] translation error: {e}")
+        raise
+
+
