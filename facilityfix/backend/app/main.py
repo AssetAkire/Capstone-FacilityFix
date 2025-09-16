@@ -1,79 +1,100 @@
-from fastapi import FastAPI
+# app/main.py
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 import logging
+import importlib
+import traceback
 
-# Configure logging
+# Logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("facilityfix")
 
+# App
 app = FastAPI(
     title="FacilityFix API",
     description="Smart Maintenance and Repair Analytics Management System",
-    version="1.0.0"
+    version="1.0.0",
 )
 
-# CORS middleware
+# CORS (keep permissive for dev; tighten for prod)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust as needed for production
+    allow_origins=["*"],         
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-def safe_include_router(router_module_path: str, router_name: str = "router"):
-    """Safely include a router with error handling"""
+# Router loader
+def safe_include_router(router_module_path: str, router_name: str = "router") -> bool:
+    """Safely import and include a router with error handling."""
     try:
-        module = __import__(router_module_path, fromlist=[router_name])
+        module = importlib.import_module(router_module_path)
         router = getattr(module, router_name)
         app.include_router(router)
-        logger.info(f"✅ Successfully included {router_module_path}")
+        logger.info("✅ Included %s", router_module_path)
         return True
     except Exception as e:
-        logger.error(f"❌ Failed to include {router_module_path}: {str(e)}")
-        import traceback
+        logger.error("❌ Failed to include %s: %s", router_module_path, str(e))
         traceback.print_exc()
         return False
 
-# Include routers with error handling
 logger.info("Loading routers...")
-
-# Try to include each router individually
 routers_to_load = [
     ("app.routers.auth", "Authentication"),
     ("app.routers.database", "Database"),
     ("app.routers.users", "Users"),
     ("app.routers.profiles", "Profiles"),
+    ("app.routers.work_orders", "Work Orders"),
     ("app.routers.repair_requests", "Repair Requests"),
-    ("app.routers.work_orders", "Work Orders")
-    
 ]
 
-successful_routers = []
-failed_routers = []
+successful_routers: list[str] = []
+failed_routers: list[str] = []
 
-for router_path, router_description in routers_to_load:
-    if safe_include_router(router_path):
-        successful_routers.append(router_description)
+for module_path, description in routers_to_load:
+    if safe_include_router(module_path):
+        successful_routers.append(description)
     else:
-        failed_routers.append(router_description)
+        failed_routers.append(description)
 
-logger.info(f"Successfully loaded routers: {successful_routers}")
+logger.info("Routers loaded OK: %s", successful_routers)
 if failed_routers:
-    logger.warning(f"Failed to load routers: {failed_routers}")
+    logger.warning("Routers failed: %s", failed_routers)
+
+# Root + Health + HEAD handlers (prevents '405 Method Not Allowed' on HEAD)
+@app.head("/")
+async def head_root() -> Response:
+    # Browsers/devtools often probe with HEAD; return 200 to avoid noisy 405 logs.
+    return Response(status_code=200)
 
 @app.get("/")
 async def root():
     return {
         "message": "Welcome to the FacilityFix API",
         "loaded_routers": successful_routers,
-        "failed_routers": failed_routers
+        "failed_routers": failed_routers,
     }
+
+@app.head("/health")
+async def head_health() -> Response:
+    return Response(status_code=200)
 
 @app.get("/health")
 async def health_check():
     return {
         "status": "healthy",
         "loaded_routers": len(successful_routers),
-        "failed_routers": len(failed_routers)
+        "failed_routers": len(failed_routers),
     }
+
+# (Optional) quiet preflight for /
+@app.options("/")
+async def options_root() -> Response:
+    return Response(status_code=204)
+
+# Local run helper (optional)--
+if __name__ == "__main__":
+    import uvicorn
+    # For real-device testing on the same LAN: host='0.0.0.0'
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

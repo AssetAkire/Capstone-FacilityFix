@@ -16,10 +16,10 @@ class UserStatus(str, Enum):
 
 class StaffClassification(str, Enum):
     MAINTENANCE = "maintenance"
-    SECURITY = "security"
-    HOUSEKEEPING = "housekeeping"
-    ENGINEERING = "engineering"
-    ADMINISTRATION = "administration"
+    CARPENTRY = "carpentry"
+    PLUMBING = "plumbing"
+    ELECTRICAL = "electrical"
+    MASONRY = "masonry"
 
 class BuildingCode(str, Enum):
     A = "A"
@@ -37,7 +37,7 @@ class StaffCreate(BaseModel):
     password: str = Field(..., min_length=6)
     first_name: str = Field(..., min_length=1)
     last_name: str = Field(..., min_length=1)
-    staff_id: Optional[str] = None # Auto-generated if not provided
+    staff_id: Optional[str] = None 
     classification: StaffClassification
     phone_number: Optional[str] = None
 
@@ -46,16 +46,25 @@ class TenantCreate(BaseModel):
     password: str = Field(..., min_length=6)
     first_name: str = Field(..., min_length=1)
     last_name: str = Field(..., min_length=1)
-    building_unit: str = Field(..., description="Format: A-01, B-15, C-23")
+    building_unit: str = Field(..., description="Format: A-00010 (buildings A, B, C only)")
     phone_number: Optional[str] = None
 
-    @validator('building_unit')
-    def validate_building_unit(cls, v):
-        # Validate format: Letter-Number (e.g., A-01, B-15, C-23)
-        pattern = r'^[ABC]-\d{2}$'
-        if not re.match(pattern, v):
-            raise ValueError('Building unit must be in format A-01, B-15, or C-23 (buildings A, B, C only)')
-        return v.upper()
+    @validator('building_unit', pre=True)
+    def validate_building_unit(cls, v: str) -> str:
+        # Normalize: trim + UPPERCASE
+        if not isinstance(v, str):
+            raise ValueError('Building unit must be a string')
+        s = v.strip().upper()
+
+        # Accept 1–5 digits after the hyphen, then zero-pad to 5
+        # e.g. A-10 -> A-00010; requires hyphen and building A/B/C
+        m = re.match(r'^([ABC])-(\d{1,5})$', s)
+        if not m:
+            raise ValueError("Building unit must be in format A-00010 (A/B/C only, 1–5 digits).")
+
+        building = m.group(1)
+        unit_num = m.group(2).zfill(5)  # zero-pad to 5 digits
+        return f"{building}-{unit_num}"
 
 class UserLogin(BaseModel):
     identifier: str = Field(..., description="Email or User ID (e.g., T-0001)")

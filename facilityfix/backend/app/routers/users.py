@@ -1,3 +1,4 @@
+#routers/users
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional
 from ..models.user import UserResponse, UserRole
@@ -504,4 +505,61 @@ async def bulk_update_user_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error in bulk update: {str(e)}"
+        )
+
+
+from fastapi import Request
+
+# Add this endpoint to your users router
+@router.get("/me/profile", response_model=dict)
+async def get_my_profile(
+    request: Request,
+    current_user: dict = Depends(get_current_user)  # Use get_current_user instead of admin/staff
+):
+    """Get the current authenticated user's profile data"""
+    try:
+        # Get the current user's ID from the authenticated request
+        user_id = current_user.get("user_id") or current_user.get("id")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User ID not found in token"
+            )
+
+        # Query the user document
+        success, user_data, error = await database_service.query_documents(
+            COLLECTIONS["users"],
+            filters=[("user_id", "==", user_id)],
+            limit=1
+        )
+        
+        if not success or not user_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found"
+            )
+        
+        user_profile = user_data[0]
+        
+        # Format the response exactly as required by Flutter app
+        response_data = {
+            "success": True,
+            "data": {
+                "id": user_profile.get("id", ""),
+                "first_name": user_profile.get("first_name", ""),
+                "building_id": user_profile.get("building_id", ""),
+                "unit_id": user_profile.get("unit_id", ""),
+                "building_unit": f"Building {user_profile.get('building_id', '')} • Unit {user_profile.get('unit_id', '')}"
+            }
+        }
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving user profile: {str(e)}"
         )
