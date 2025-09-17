@@ -27,13 +27,11 @@ from typing_extensions import Literal
 
 # Domain models
 from ..models.user import (
-    UserRole,
-    UserStatus,
-    AdminCreate,
-    StaffCreate,
-    TenantCreate,
-    UserCreate,
+    UserLogin, UserResponse, UserRole, UserStatus,
+    AdminCreate, StaffCreate, TenantCreate, UserCreate,
+    AdminLogin, StaffLogin, TenantLogin    
 )
+
 from ..models.database_models import UserProfile  # noqa: F401
 
 # Auth/admin deps
@@ -52,6 +50,117 @@ logger = logging.getLogger("facilityfix.routers.auth")
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
+#<<<<<<< back-end
+@router.post("/login/admin")
+async def login_admin(login_data: AdminLogin):
+    """Admin login with userEmail, userId, and userPassword"""
+    return await _login_user_by_role(
+        email=login_data.userEmail,
+        user_id=login_data.userId,
+        password=login_data.userPassword,
+        role=UserRole.ADMIN
+    )
+
+@router.post("/login/staff")
+async def login_staff(login_data: StaffLogin):
+    """Staff login with userEmail, userId, userDepartment, and userPassword"""
+    return await _login_user_by_role(
+        email=login_data.userEmail,
+        user_id=login_data.userId,
+        password=login_data.userPassword,
+        role=UserRole.STAFF,
+        department=login_data.userDepartment
+    )
+
+@router.post("/login/tenant")
+async def login_tenant(login_data: TenantLogin):
+    """Tenant login with userEmail, userId, buildingUnitNo, and userPassword"""
+    return await _login_user_by_role(
+        email=login_data.userEmail,
+        user_id=login_data.userId,
+        password=login_data.userPassword,
+        role=UserRole.TENANT,
+        building_unit=login_data.buildingUnitNo
+    )
+
+async def _login_user_by_role(email: str, user_id: str, password: str, role: UserRole, **kwargs):
+    """Internal function to handle role-specific login validation"""
+    try:
+        # Verify user exists by email
+        user = await firebase_auth.get_user_by_email(email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Get user profile from Firestore
+        profile_success, profile_data, profile_error = await database_service.get_document(
+            COLLECTIONS['users'],
+            user.uid
+        )
+        
+        if not profile_success or not profile_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User profile not found"
+            )
+        
+        # Validate role matches
+        if profile_data.get('role') != role.value:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Invalid role. Expected {role.value}"
+            )
+        
+        # Validate user_id matches
+        if profile_data.get('user_id') != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid user ID"
+            )
+        
+        # Role-specific validations
+        if role == UserRole.STAFF:
+            department = kwargs.get('department')
+            if profile_data.get('department') != department:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid department"
+                )
+        elif role == UserRole.TENANT:
+            building_unit = kwargs.get('building_unit')
+            if profile_data.get('building_unit') != building_unit:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid building unit"
+                )
+        
+        # Check user status
+        user_status = profile_data.get('status', 'active')
+        if user_status in ['suspended', 'inactive']:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Account is {user_status}. Please contact administrator."
+            )
+        
+        return {
+            "message": "Login validation successful, proceed with Firebase client authentication",
+            "uid": user.uid,
+            "user_id": profile_data.get('user_id'),
+            "email": user.email,
+            "role": profile_data.get('role'),
+            "status": user_status
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Login validation failed"
+        )
+#=======
 
 # Request models
 class AdminLogin(BaseModel):
@@ -130,6 +239,7 @@ def _normalize_building_unit(s: Optional[str]) -> Optional[str]:
 
 
 # Registration 
+#>>>>>>> back-end
 
 @router.post("/register/admin", response_model=dict)
 async def register_admin(admin_data: AdminCreate) -> Dict[str, Any]:
@@ -138,9 +248,14 @@ async def register_admin(admin_data: AdminCreate) -> Dict[str, Any]:
 
 
 @router.post("/register/staff", response_model=dict)
+#<<<<<<< back-end
+async def register_staff(staff_data: StaffCreate, current_user: dict = Depends(require_admin)):
+    """Register a new staff user - Requires admin authentication"""
+#=======
 async def register_staff(staff_data: StaffCreate) -> Dict[str, Any]:
     """Register a new staff user."""
     # To require admin auth: add param current_user: dict = Depends(require_admin)
+#>>>>>>> back-end
     return await _register_user_by_role(staff_data, UserRole.STAFF)
 
 
@@ -166,19 +281,33 @@ async def _register_user_by_role(
 
         # Create user in Firebase Auth
         firebase_user = await firebase_auth.create_user(
+#<<<<<<< back-end
+            email=user_data.userEmail,  # Updated field name
+            password=user_data.userPassword,  # Updated field name
+            display_name=f"{user_data.firstName} {user_data.lastName}"  # Updated field names
+#=======
             email=user_data.email,
             password=user_data.password,
             display_name=f"{user_data.first_name} {user_data.last_name}",
+#>>>>>>> back-end
         )
 
         # Profile doc
         profile: Dict[str, Any] = {
             "id": firebase_user["uid"],
             "user_id": user_id,
+#<<<<<<< back-end
+            "email": user_data.userEmail,  # Updated field name
+            "first_name": user_data.firstName,  # Updated field name
+            "last_name": user_data.lastName,  # Updated field name
+            "phone_number": user_data.contactNumber,  # Updated field name
+            "birth_date": user_data.birthDate,  # Added birth date
+#=======
             "email": user_data.email,
             "first_name": user_data.first_name,
             "last_name": user_data.last_name,
             "phone_number": getattr(user_data, "phone_number", None),
+#>>>>>>> back-end
             "role": role.value,
             "status": UserStatus.ACTIVE.value,
             "created_at": datetime.utcnow(),
@@ -186,6 +315,17 @@ async def _register_user_by_role(
         }
 
         if role == UserRole.STAFF:
+#<<<<<<< back-end
+            user_profile_data.update({
+                "staff_id": user_id,
+                "department": user_data.staffDepartment,  # Updated field name
+                "classification": user_data.staffDepartment  # Use department as classification
+            })
+        elif role == UserRole.TENANT:
+            building_id, unit_number = user_id_service.parse_building_unit(user_data.buildingUnitNo)  # Updated field name
+            user_profile_data.update({
+                "building_unit": user_data.buildingUnitNo,  # Updated field name
+#=======
             profile.update({
                 "staff_id": getattr(user_data, "staff_id", user_id),
                 "classification": user_data.classification.value,
@@ -195,6 +335,7 @@ async def _register_user_by_role(
             building_id, unit_number = user_id_service.parse_building_unit(user_data.building_unit)
             profile.update({
                 "building_unit": user_data.building_unit,
+#>>>>>>> back-end
                 "building_id": building_id,
                 "unit_id": unit_number,
             })
@@ -230,6 +371,66 @@ async def _register_user_by_role(
             "profile_created": True,
         }
 
+#<<<<<<< back-end
+@router.post("/login")
+async def login_user(login_data: UserLogin):
+    """Generic login with email or user ID - Backward compatibility"""
+    try:
+        user = None
+        
+        # Check if identifier is email or user ID
+        if '@' in login_data.identifier:
+            # Login with email
+            user = await firebase_auth.get_user_by_email(login_data.identifier)
+        else:
+            # Login with user ID (e.g., T-0001)
+            # First find user in Firestore by user_id
+            success, users, error = await database_service.query_documents(
+                COLLECTIONS['users'],
+                [("user_id", "==", login_data.identifier)]
+            )
+            
+            if success and users:
+                user_profile = users[0]
+                user = await firebase_auth.get_user(user_profile['id'])
+        
+        if user:
+            # Get user profile from Firestore
+            profile_success, profile_data, profile_error = await database_service.get_document(
+                COLLECTIONS['users'],
+                user.uid
+            )
+            
+            if profile_success and profile_data:
+                user_status = profile_data.get('status', 'active')
+                if user_status in ['suspended', 'inactive']:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=f"Account is {user_status}. Please contact administrator."
+                    )
+                
+                return {
+                    "message": "User exists, proceed with Firebase client login",
+                    "uid": user.uid,
+                    "user_id": profile_data.get('user_id'),
+                    "email": user.email,
+                    "role": profile_data.get('role'),
+                    "status": user_status
+                }
+            else:
+                return {
+                    "message": "User exists, proceed with Firebase client login",
+                    "uid": user.uid,
+                    "email": user.email,
+                    "status": "active"
+                }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+#=======
+#>>>>>>> back-end
     except HTTPException:
         raise
     except Exception as e:
@@ -237,6 +438,103 @@ async def _register_user_by_role(
         raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
 
 
+#<<<<<<< back-end
+@router.post("/exchange-token")
+async def exchange_custom_token_for_id_token(login_data: UserLogin):
+    """
+    Exchange custom token for ID token (testing-only endpoint).
+    Allows testing in Swagger UI without external tools.
+    """
+    try:
+        user = None
+
+        # Find user by identifier (email or user_id)
+        if '@' in login_data.identifier:
+            user = await firebase_auth.get_user_by_email(login_data.identifier)
+        else:
+            success, users, error = await database_service.query_documents(
+                COLLECTIONS['users'],
+                [("user_id", "==", login_data.identifier)]
+            )
+            if success and users:
+                user_profile = users[0]
+                user = await firebase_auth.get_user(user_profile['id'])
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        # Step 1: Generate custom token
+        custom_token = await firebase_auth.create_custom_token(user.uid)
+
+        # Step 2: Exchange custom token for ID token using Firebase REST API
+        async with httpx.AsyncClient() as client:
+            exchange_url = (
+                f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken"
+                f"?key={settings.FIREBASE_WEB_API_KEY}"
+            )
+
+            exchange_response = await client.post(
+                exchange_url,
+                json={
+                    "token": custom_token,
+                    "returnSecureToken": True
+                },
+                headers={"Content-Type": "application/json"}
+            )
+
+            if exchange_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Token exchange failed: {exchange_response.text}"
+                )
+
+            token_data = exchange_response.json()
+            id_token = token_data.get("idToken")
+
+            if not id_token:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to get ID token from exchange"
+                )
+
+        # Step 3: Fetch user profile from Firestore (match by Firebase UID)
+        profile_success, profile_docs, profile_error = await database_service.query_documents(
+            COLLECTIONS['users'],
+            [("id", "==", user.uid)]
+        )
+        profile_data = profile_docs[0] if profile_success and profile_docs else {}
+
+        return {
+            "id_token": id_token,
+            "token_type": "Bearer",
+            "expires_in": token_data.get("expiresIn", "3600"),
+            "refresh_token": token_data.get("refreshToken"),
+            "uid": user.uid,
+            "user_id": profile_data.get("user_id"),
+            "email": user.email,
+            "role": profile_data.get("role"),
+            "instructions": "Use the 'id_token' as Bearer token in Authorization header for protected endpoints"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Token exchange failed: {str(e)}"
+        )
+        
+        # Get user profile for additional info
+        profile_success, profile_data, profile_error = await database_service.get_document(
+            COLLECTIONS['users'],
+            user.uid
+        )
+        
+        return {
+#=======
 # LOGIN (role-based required fields + server-side password check)
 
 @router.post("/login")
@@ -297,6 +595,7 @@ async def login_user(body: LoginBody) -> Dict[str, Any]:
 
         # 3) Return token + profile summary
         result: Dict[str, Any] = {
+#>>>>>>> back-end
             "id_token": id_token,
             "token_type": "Bearer",
             "refresh_token": refresh_token,

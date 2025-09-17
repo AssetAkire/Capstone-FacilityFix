@@ -1,6 +1,7 @@
 from ..database.database_service import database_service
 from ..database.collections import COLLECTIONS
 from ..models.user import UserRole
+from ..models.database_models import UserProfile
 import asyncio
 
 class UserIdService:
@@ -43,6 +44,19 @@ class UserIdService:
         # Generate next number
         next_number = max_number + 1
         return f"{prefix}-{next_number:04d}"
+    
+    @staticmethod
+    async def get_user_profile(user_id: str) -> UserProfile:
+        """Get user profile by user ID"""
+        success, user_data, error = await database_service.get_document(
+            COLLECTIONS['users'], 
+            user_id
+        )
+        
+        if not success or not user_data:
+            return None
+            
+        return UserProfile(**user_data)
     
     @staticmethod
     def parse_building_unit(building_unit: str) -> tuple:

@@ -2,8 +2,8 @@ from typing import Dict, Any, Optional, List
 from pydantic import ValidationError
 from app.models.database_models import (
     Building, Unit, UserProfile, Equipment, Inventory,
-    RepairRequest, MaintenanceTask, Announcement, WorkOrderPermit,
-    WorkOrder, StatusHistory, Feedback
+    ConcernSlip, JobService, WorkOrderPermit, MaintenanceTask, Announcement,
+    StatusHistory, Feedback
 )
 
 class SchemaValidator:
@@ -15,13 +15,13 @@ class SchemaValidator:
         'users': UserProfile,
         'equipment': Equipment,
         'inventory': Inventory,
-        'repair_requests': RepairRequest,
+        'concern_slips': ConcernSlip,
+        'job_services': JobService,
+        'work_order_permits': WorkOrderPermit,
         'maintenance_tasks': MaintenanceTask,
         'announcements': Announcement,
-        'work_order_permits': WorkOrderPermit,
-        'work_order': WorkOrder,
         'status_history': StatusHistory,
-        'feedback': Feedback 
+        'feedback': Feedback
     }
     
     @classmethod
@@ -104,4 +104,5 @@ class SchemaValidator:
         model_class = cls.MODEL_MAPPING[collection]
         return model_class.schema()
 
+# Create global validator instance
 schema_validator = SchemaValidator()

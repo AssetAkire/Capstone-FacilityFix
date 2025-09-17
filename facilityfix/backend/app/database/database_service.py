@@ -183,6 +183,42 @@ class DatabaseService:
         except Exception as e:
             return False, [], f"Failed to query collection {collection}: {e}"
     
+    async def get_all_documents(self, collection: str) -> List[Dict[str, Any]]:
+        """
+        Get all documents from a Firestore collection.
+        Returns a list of dictionaries with Firestore doc IDs included as '_doc_id'.
+        """
+        raw = self._raw_firestore()
+
+        if raw is not None:
+            # Use the raw firestore client
+            def _run():
+                out = []
+                for snap in raw.collection(collection).stream():
+                    data = snap.to_dict() or {}
+                    data["_doc_id"] = snap.id
+                    out.append(data)
+                return out
+
+            try:
+                docs = await anyio.to_thread.run_sync(_run)
+                return docs
+            except Exception as e:
+                raise Exception(f"Failed to fetch documents from {collection}: {e}")
+
+        # Fallback: if wrapper client exposes get_collection()
+        try:
+            documents = self.client.get_collection(collection)
+            normalized = []
+            for d in documents or []:
+                if isinstance(d, dict):
+                    if "_doc_id" not in d and "id" in d:
+                        d = {**d, "_doc_id": d["id"]}
+                normalized.append(d)
+            return normalized
+        except Exception as e:
+            raise Exception(f"Failed to fetch documents from {collection}: {e}")
+    
     async def get_building_data(self, building_id: str) -> tuple[bool, Dict[str, Any], Optional[str]]:
         """
         Get comprehensive building data including units, equipment, etc.

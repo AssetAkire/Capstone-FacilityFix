@@ -26,13 +26,58 @@ class BuildingCode(str, Enum):
     B = "B"
     C = "C"
 
+class AdminLogin(BaseModel):
+    userEmail: EmailStr
+    userId: str = Field(..., description="Admin user ID (e.g., A-0001)")
+    userPassword: str
+
+class StaffLogin(BaseModel):
+    userEmail: EmailStr
+    userId: str = Field(..., description="Staff user ID (e.g., S-0001)")
+    userDepartment: str = Field(..., description="Staff department")
+    userPassword: str
+
+class TenantLogin(BaseModel):
+    userEmail: EmailStr
+    userId: str = Field(..., description="Tenant user ID (e.g., T-0001)")
+    buildingUnitNo: str = Field(..., description="Building unit number (e.g., A-01)")
+    userPassword: str
+
 class AdminCreate(BaseModel):
-    email: EmailStr
-    password: str = Field(..., min_length=6)
-    first_name: str = Field(..., min_length=1)
-    last_name: str = Field(..., min_length=1)
+    firstName: str = Field(..., min_length=1)
+    lastName: str = Field(..., min_length=1)
+    birthDate: datetime = Field(..., description="Date of birth")
+    userEmail: EmailStr
+    contactNumber: str = Field(..., description="Phone number")
+    userPassword: str = Field(..., min_length=6)
 
 class StaffCreate(BaseModel):
+#<<<<<<< back-end
+    firstName: str = Field(..., min_length=1)
+    lastName: str = Field(..., min_length=1)
+    birthDate: datetime = Field(..., description="Date of birth")
+    staffDepartment: str = Field(..., description="Staff department")
+    userEmail: EmailStr
+    contactNumber: str = Field(..., description="Phone number")
+    userPassword: str = Field(..., min_length=6)
+
+class TenantCreate(BaseModel):
+    firstName: str = Field(..., min_length=1)
+    lastName: str = Field(..., min_length=1)
+    birthDate: datetime = Field(..., description="Date of birth")
+    buildingUnitNo: str = Field(..., description="Building unit (e.g., A-01)")
+    userEmail: EmailStr
+    contactNumber: str = Field(..., description="Phone number")
+    userPassword: str = Field(..., min_length=6)
+
+    @validator('buildingUnitNo')
+    def validate_building_unit(cls, v):
+        # Validate format: Letter-Number (e.g., A-01, B-15, C-23)
+        pattern = r'^[ABC]-\d{2}$'
+        if not re.match(pattern, v):
+            raise ValueError('Building unit must be in format A-01, B-15, or C-23 (buildings A, B, C only)')
+        return v.upper()
+#======="""
     email: EmailStr
     password: str = Field(..., min_length=6)
     first_name: str = Field(..., min_length=1)
@@ -65,6 +110,7 @@ class TenantCreate(BaseModel):
         building = m.group(1)
         unit_num = m.group(2).zfill(5)  # zero-pad to 5 digits
         return f"{building}-{unit_num}"
+#>>>>>>> back-end
 
 class UserLogin(BaseModel):
     identifier: str = Field(..., description="Email or User ID (e.g., T-0001)")

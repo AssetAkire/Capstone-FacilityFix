@@ -53,19 +53,70 @@ class Inventory(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-# Repair Request Model
-class RepairRequest(BaseModel):
+# Concern Slip Model
+class ConcernSlip(BaseModel):
     id: Optional[str] = None
-    reported_by: str  # user_id
+    reported_by: str  # user_id (tenant)
     unit_id: Optional[str] = None
-    assigned_to: Optional[str] = None  # user_id
     title: str
     description: str
     location: str
-    classification: str  # electrical, plumbing, hvac, etc.
+    category: str  # electrical, plumbing, hvac, carpentry, maintenance, security, fire_safety, general
     priority: str = Field(default="medium")  # low, medium, high, critical
-    status: str = Field(default="open")  # open, in_progress, resolved, closed
+    status: str = Field(default="pending")  # pending, evaluated, approved, rejected
+    urgency_assessment: Optional[str] = None  # Admin's evaluation notes
+    resolution_type: Optional[str] = None  # job_service, work_permit, rejected
     attachments: Optional[List[str]] = []  # file URLs
+    admin_notes: Optional[str] = None
+    evaluated_by: Optional[str] = None  # admin user_id
+    evaluated_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+# JobService Model (modified from WorkOrder)
+class JobService(BaseModel):
+    id: Optional[str] = None
+    concern_slip_id: str  # Links to concern_slip
+    created_by: str  # admin user_id
+    assigned_to: Optional[str] = None  # internal staff user_id
+    title: str
+    description: str
+    location: str
+    category: str
+    priority: str
+    status: str = Field(default="assigned")  # assigned, in_progress, completed, closed
+    scheduled_date: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    estimated_hours: Optional[float] = None
+    actual_hours: Optional[float] = None
+    materials_used: Optional[List[str]] = []
+    staff_notes: Optional[str] = None
+    completion_notes: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class WorkOrderPermit(BaseModel):
+    id: Optional[str] = None
+    concern_slip_id: str  # Links to concern_slip
+    requested_by: str  # tenant user_id
+    unit_id: str
+    contractor_name: str
+    contractor_contact: str
+    contractor_company: Optional[str] = None
+    work_description: str
+    proposed_start_date: datetime
+    estimated_duration: str  # e.g., "2 hours", "1 day"
+    specific_instructions: str
+    entry_requirements: Optional[str] = None  # Special access needs
+    status: str = Field(default="pending")  # pending, approved, denied, completed
+    approved_by: Optional[str] = None  # admin user_id
+    approval_date: Optional[datetime] = None
+    denial_reason: Optional[str] = None
+    permit_conditions: Optional[str] = None  # Special conditions for approval
+    actual_start_date: Optional[datetime] = None
+    actual_completion_date: Optional[datetime] = None
+    admin_notes: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -98,20 +149,17 @@ class Announcement(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-# Work Order Permit Model
-class WorkOrderPermit(BaseModel):
+# Notification Model for system-wide notifications
+class Notification(BaseModel):
     id: Optional[str] = None
-    user_id: str
-    unit_id: str
-    date_requested: datetime
-    full_name: str
-    account_type: str  # owner, tenant, contractor
-    specific_instructions: str
-    status: str = Field(default="pending")  # pending, approved, denied
-    approved_by: Optional[str] = None
-    approval_date: Optional[datetime] = None
+    recipient_id: str  # user_id
+    sender_id: Optional[str] = None  # user_id or system
+    title: str
+    message: str
+    notification_type: str  # concern_update, job_assigned, permit_approved, etc.
+    related_id: Optional[str] = None  # concern_slip_id, job_service_id, or work_permit_id
+    is_read: bool = Field(default=False)
     created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
 
 # User Profile Model (extends Firebase Auth)
 class UserProfile(BaseModel):
@@ -124,24 +172,6 @@ class UserProfile(BaseModel):
     department: Optional[str] = None
     role: str  # admin, staff, tenant
     status: str = Field(default="active")  # active, suspended, inactive
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-# Work Order Model
-class WorkOrder(BaseModel):
-    id: Optional[str] = None
-    request_id: str  # Links to repair_request
-    created_by: str  # admin user_id
-    assigned_to: Optional[str] = None  # staff/contractor user_id
-    work_type: str = Field(default="job_service")  # job_service (in-house) or work_permit (3rd party)
-    status: str = Field(default="unassigned")  # unassigned, assigned, in_progress, completed, closed
-    scheduled_date: Optional[datetime] = None
-    completed_date: Optional[datetime] = None
-    estimated_hours: Optional[float] = None
-    actual_hours: Optional[float] = None
-    materials_used: Optional[List[str]] = []
-    cost: Optional[float] = None
-    notes: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -158,8 +188,9 @@ class StatusHistory(BaseModel):
 # Feedback Model (for tenant feedback on completed work)
 class Feedback(BaseModel):
     id: Optional[str] = None
-    work_order_id: str
-    request_id: str  # Links back to original repair request
+    concern_slip_id: str  # Links back to original concern slip
+    service_id: Optional[str] = None  # Links to job_service_id or work_permit_id
+    service_type: str  # "job_service" or "work_permit"
     submitted_by: str  # tenant user_id
     rating: int = Field(ge=1, le=5)  # 1-5 star rating
     comments: Optional[str] = None
