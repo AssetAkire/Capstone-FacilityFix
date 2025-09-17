@@ -48,80 +48,107 @@ class ConcernSlipService:
 
         return ConcernSlip(**concern_slip_data)
 
-    async def evaluate_concern_slip(self, concern_slip_id: str, evaluated_by: str, evaluation_data: dict) -> ConcernSlip:
-        """Evaluate concern slip - approve/reject and determine resolution type"""
+    async def evaluate_concern_slip(self, concern_slip_id: str, evaluated_by: str, evaluation_data: dict):
+        # Fetch concern slip (by doc ID first)
+        success, concern_slip, error = await self.db.get_document("concern_slips", concern_slip_id)
 
-        # Verify evaluator is admin
-        success, evaluator_profile, error = await database_service.get_document(
-            COLLECTIONS['users'], evaluated_by
-        )
-        if not success or not evaluator_profile or evaluator_profile.get("role") != "admin":
-            raise ValueError("Only admins can evaluate concern slips")
+        # If not found by document ID, try lookup by "id" field
+        if not success or not concern_slip:
+            success, results, error = await self.db.query_documents("concern_slips", [("id", "==", concern_slip_id)])
+            if not success or not results:
+                raise ValueError(f"Concern slip {concern_slip_id} not found")
+            concern_slip = results[0]
+            # Use the Firestore doc ID for updating
+            concern_slip_id = concern_slip.get("_doc_id", concern_slip_id)
 
-        # Verify concern slip exists and is pending
-        concern_slip = await self.db.get_document("concern_slips", concern_slip_id)
-        if not concern_slip:
-            raise ValueError("Concern slip not found")
-
-        if concern_slip.get("status") != "pending":
-            raise ValueError("Only pending concern slips can be evaluated")
-
+        # Build update data safely
         update_data = {
-            "status": evaluation_data["status"],
+            "status": evaluation_data.get("status", concern_slip.get("status")),
+            "resolution_type": evaluation_data.get("resolution_type", concern_slip.get("resolution_type")),
+            "urgency_assessment": evaluation_data.get("urgency_assessment", concern_slip.get("urgency_assessment")),
+            "admin_notes": evaluation_data.get("admin_notes", concern_slip.get("admin_notes")),
             "evaluated_by": evaluated_by,
-            "evaluated_at": datetime.utcnow(),
-            "urgency_assessment": evaluation_data.get("urgency_assessment"),
-            "admin_notes": evaluation_data.get("admin_notes"),
-            "updated_at": datetime.utcnow()
+            "evaluated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat()
         }
 
-        # Set resolution type if approved
-        if evaluation_data["status"] == "approved":
-            update_data["resolution_type"] = evaluation_data.get("resolution_type")
+        # Save changes
+        success, error = await self.db.update_document("concern_slips", concern_slip_id, update_data)
+        if not success:
+            raise Exception(error or "Failed to update concern slip evaluation")
 
-        await self.db.update_document("concern_slips", concern_slip_id, update_data)
+        # Get updated slip
+        success, updated_slip, error = await self.db.get_document("concern_slips", concern_slip_id)
+        if not success or not updated_slip:
+            raise Exception(error or "Failed to retrieve updated concern slip")
 
-        # Send notification to tenant
-        tenant_id = concern_slip.get("reported_by")
-        status_message = "approved" if evaluation_data["status"] == "approved" else "rejected"
-        await self._send_tenant_notification(
-            tenant_id,
-            concern_slip_id,
-            f"Your concern slip has been {status_message}"
-        )
-
-        updated_concern = await self.db.get_document("concern_slips", concern_slip_id)
-        return ConcernSlip(**updated_concern)
+        return ConcernSlip(**updated_slip)
 
     async def get_concern_slip(self, concern_slip_id: str) -> Optional[ConcernSlip]:
         """Get concern slip by ID"""
-        concern_data = await self.db.get_document("concern_slips", concern_slip_id)
-        return ConcernSlip(**concern_data) if concern_data else None
+        # Fetch concern slip (by doc ID first)
+        success, concern_data, error = await self.db.get_document("concern_slips", concern_slip_id)
+        
+        if not success or not concern_data:
+            # Try lookup by "id" field if not found by document ID
+            success, results, error = await self.db.query_documents("concern_slips", [("id", "==", concern_slip_id)])
+            if not success or not results:
+                return None
+            concern_data = results[0]
+        
+        return ConcernSlip(**concern_data)
 
     async def get_concern_slips_by_tenant(self, tenant_id: str) -> List[ConcernSlip]:
         """Get all concern slips submitted by a tenant"""
-        concerns = await self.db.query_documents("concern_slips", {"reported_by": tenant_id})
+        # Fetch concern slips by tenant ID
+        success, concerns, error = await self.db.query_documents("concern_slips", [("reported_by", "==", tenant_id)])
+        
+        if not success or not concerns:
+            return []
+        
         return [ConcernSlip(**concern) for concern in concerns]
 
     async def get_concern_slips_by_status(self, status: str) -> List[ConcernSlip]:
         """Get all concern slips with specific status"""
-        concerns = await self.db.query_documents("concern_slips", {"status": status})
+        # Fetch concern slips by status
+        success, concerns, error = await self.db.query_documents("concern_slips", [("status", "==", status)])
+        
+        if not success or not concerns:
+            return []
+        
         return [ConcernSlip(**concern) for concern in concerns]
 
     async def get_pending_concern_slips(self) -> List[ConcernSlip]:
         """Get all pending concern slips awaiting evaluation"""
-        concerns = await self.db.query_documents("concern_slips", {"status": "pending"})
+        # Fetch pending concern slips
+        success, concerns, error = await self.db.query_documents("concern_slips", [("status", "==", "pending")])
+        
+        if not success or not concerns:
+            return []
+        
         return [ConcernSlip(**concern) for concern in concerns]
 
     async def get_approved_concern_slips(self) -> List[ConcernSlip]:
         """Get all approved concern slips ready for resolution"""
-        concerns = await self.db.query_documents("concern_slips", {"status": "approved"})
+        # Fetch approved concern slips
+        success, concerns, error = await self.db.query_documents("concern_slips", [("status", "==", "approved")])
+        
+        if not success or not concerns:
+            return []
+        
         return [ConcernSlip(**concern) for concern in concerns]
 
     async def get_all_concern_slips(self) -> List[ConcernSlip]:
         """Get all concern slips (Admin only)"""
-        concerns = await self.db.get_all_documents("concern_slips")
-        return [ConcernSlip(**concern) for concern in concerns]
+        try:
+            concerns = await self.db.get_all_documents("concern_slips")
+            
+            if not concerns:
+                return []
+            
+            return [ConcernSlip(**concern) for concern in concerns]
+        except Exception as e:
+            raise Exception(f"Failed to get concern slips: {str(e)}")
 
     async def _send_admin_notification(self, concern_slip_id: str, message: str):
         """Send notification to all admins"""

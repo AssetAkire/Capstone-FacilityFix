@@ -60,7 +60,11 @@ async def evaluate_concern_slip(
     current_user: dict = Depends(get_current_user),
     _: None = Depends(require_role(["admin"]))
 ):
-    """Evaluate concern slip - approve/reject and determine resolution type (Admin only)"""
+    """
+    Evaluate concern slip (Admin only):
+    - Approve or reject
+    - Set resolution type (job_service, work_permit, etc.)
+    """
     try:
         service = ConcernSlipService()
         concern_slip = await service.evaluate_concern_slip(
@@ -72,7 +76,10 @@ async def evaluate_concern_slip(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to evaluate concern slip: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to evaluate concern slip: {str(e)}"
+        )
 
 @router.get("/{concern_slip_id}", response_model=ConcernSlip)
 async def get_concern_slip(

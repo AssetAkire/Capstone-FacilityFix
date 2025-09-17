@@ -14,11 +14,11 @@ class JobServiceService:
         """Create a new job service from an approved concern slip"""
         
         # Verify concern slip exists and is approved
-        concern_slip = await self.db.get_document("concern_slips", concern_slip_id)
-        if not concern_slip:
+        success, concern_slip_data, error = await self.db.get_document("concern_slips", concern_slip_id)
+        if not success or not concern_slip_data:
             raise ValueError("Concern slip not found")
         
-        if concern_slip.get("status") != "approved":
+        if concern_slip_data.get("status") != "approved":
             raise ValueError("Concern slip must be approved before creating job service")
         
         # Verify creator is admin
@@ -26,15 +26,17 @@ class JobServiceService:
         if not creator_profile or creator_profile.role != "admin":
             raise ValueError("Only admins can create job services")
 
+        job_service_id = f"job_{str(uuid.uuid4())[:8]}"
+
         job_service_data = {
-            "id": str(uuid.uuid4()),
+            "id": job_service_id,
             "concern_slip_id": concern_slip_id,
             "created_by": created_by,
-            "title": job_data.get("title") or concern_slip.get("title"),
-            "description": job_data.get("description") or concern_slip.get("description"),
-            "location": job_data.get("location") or concern_slip.get("location"),
-            "category": job_data.get("category") or concern_slip.get("category"),
-            "priority": job_data.get("priority") or concern_slip.get("priority"),
+            "title": job_data.get("title") or concern_slip_data.get("title"),
+            "description": job_data.get("description") or concern_slip_data.get("description"),
+            "location": job_data.get("location") or concern_slip_data.get("location"),
+            "category": job_data.get("category") or concern_slip_data.get("category"),
+            "priority": job_data.get("priority") or concern_slip_data.get("priority"),
             "status": "assigned",
             "assigned_to": job_data.get("assigned_to"),
             "scheduled_date": job_data.get("scheduled_date"),
@@ -44,10 +46,12 @@ class JobServiceService:
         }
 
         # Create job service
-        await self.db.create_document("job_services", job_service_data["id"], job_service_data)
+        success, doc_id, error = await self.db.create_document("job_services", job_service_data, job_service_id)
+        if not success:
+            raise ValueError(f"Failed to create job service: {error}")
         
         # Update concern slip status
-        await self.db.update_document("concern_slips", concern_slip_id, {
+        success, error = await self.db.update_document("concern_slips", concern_slip_id, {
             "resolution_type": "job_service",
             "updated_at": datetime.utcnow()
         })
@@ -62,7 +66,7 @@ class JobServiceService:
 
         # Send notification to tenant
         await self._send_tenant_notification(
-            concern_slip.get("reported_by"),
+            concern_slip_data.get("reported_by"),
             job_service_data["id"],
             "Your concern has been assigned to our internal staff"
         )
@@ -77,6 +81,9 @@ class JobServiceService:
         if not assigner_profile or assigner_profile.role != "admin":
             raise ValueError("Only admins can assign job services")
 
+        if not assigned_to.startswith("S-"):
+            raise ValueError("Job services can only be assigned to staff members")
+
         # Verify assignee is staff
         assignee_profile = await self.user_service.get_user_profile(assigned_to)
         if not assignee_profile or assignee_profile.role != "staff":
@@ -89,18 +96,24 @@ class JobServiceService:
             "updated_at": datetime.utcnow()
         }
 
-        await self.db.update_document("job_services", job_service_id, update_data)
+        success, error = await self.db.update_document("job_services", job_service_id, update_data)
+        if not success:
+            raise ValueError(f"Failed to assign job service: {error}")
         
         # Send notification to assigned staff
-        job_service = await self.db.get_document("job_services", job_service_id)
-        await self._send_assignment_notification(
-            assigned_to, 
-            job_service_id,
-            job_service.get("title", "Job Service Assignment")
-        )
+        success, job_service_data, error = await self.db.get_document("job_services", job_service_id)
+        if success and job_service_data:
+            await self._send_assignment_notification(
+                assigned_to, 
+                job_service_id,
+                job_service_data.get("title", "Job Service Assignment")
+            )
 
-        updated_job = await self.db.get_document("job_services", job_service_id)
-        return JobService(**updated_job)
+        success, updated_job_data, error = await self.db.get_document("job_services", job_service_id)
+        if not success or not updated_job_data:
+            raise ValueError("Failed to retrieve updated job service")
+            
+        return JobService(**updated_job_data)
 
     async def update_job_status(self, job_service_id: str, status: str, updated_by: str, notes: Optional[str] = None) -> JobService:
         """Update job service status"""
@@ -127,31 +140,37 @@ class JobServiceService:
             else:
                 update_data["staff_notes"] = notes
 
-        await self.db.update_document("job_services", job_service_id, update_data)
+        success, error = await self.db.update_document("job_services", job_service_id, update_data)
+        if not success:
+            raise ValueError(f"Failed to update job status: {error}")
 
         # Send notifications based on status
-        job_service = await self.db.get_document("job_services", job_service_id)
-        concern_slip = await self.db.get_document("concern_slips", job_service.get("concern_slip_id"))
-        
-        if status == "completed":
-            # Notify tenant of completion
-            await self._send_tenant_notification(
-                concern_slip.get("reported_by"),
-                job_service_id,
-                f"Your repair request has been completed: {job_service.get('title')}"
-            )
+        success, job_service_data, error = await self.db.get_document("job_services", job_service_id)
+        if success and job_service_data:
+            success, concern_slip_data, error = await self.db.get_document("concern_slips", job_service_data.get("concern_slip_id"))
+            
+            if status == "completed" and success and concern_slip_data:
+                # Notify tenant of completion
+                await self._send_tenant_notification(
+                    concern_slip_data.get("reported_by"),
+                    job_service_id,
+                    f"Your repair request has been completed: {job_service_data.get('title')}"
+                )
 
-        updated_job = await self.db.get_document("job_services", job_service_id)
-        return JobService(**updated_job)
+        success, updated_job_data, error = await self.db.get_document("job_services", job_service_id)
+        if not success or not updated_job_data:
+            raise ValueError("Failed to retrieve updated job service")
+            
+        return JobService(**updated_job_data)
 
     async def add_work_notes(self, job_service_id: str, notes: str, added_by: str) -> JobService:
         """Add work notes to job service"""
         
-        job_service = await self.db.get_document("job_services", job_service_id)
-        if not job_service:
+        success, job_service_data, error = await self.db.get_document("job_services", job_service_id)
+        if not success or not job_service_data:
             raise ValueError("Job service not found")
 
-        current_notes = job_service.get("staff_notes", "")
+        current_notes = job_service_data.get("staff_notes", "")
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
         user_profile = await self.user_service.get_user_profile(added_by)
         user_name = f"{user_profile.first_name} {user_profile.last_name}" if user_profile else "Unknown"
@@ -159,33 +178,50 @@ class JobServiceService:
         new_note = f"\n[{timestamp}] {user_name}: {notes}"
         updated_notes = current_notes + new_note
 
-        await self.db.update_document("job_services", job_service_id, {
+        success, error = await self.db.update_document("job_services", job_service_id, {
             "staff_notes": updated_notes,
             "updated_at": datetime.utcnow()
         })
+        
+        if not success:
+            raise ValueError(f"Failed to add work notes: {error}")
 
-        updated_job = await self.db.get_document("job_services", job_service_id)
-        return JobService(**updated_job)
+        success, updated_job_data, error = await self.db.get_document("job_services", job_service_id)
+        if not success or not updated_job_data:
+            raise ValueError("Failed to retrieve updated job service")
+            
+        return JobService(**updated_job_data)
 
     async def get_job_service(self, job_service_id: str) -> Optional[JobService]:
         """Get job service by ID"""
-        job_data = await self.db.get_document("job_services", job_service_id)
-        return JobService(**job_data) if job_data else None
+        success, job_data, error = await self.db.get_document("job_services", job_service_id)
+        if not success or not job_data:
+            return None
+        return JobService(**job_data)
 
     async def get_job_services_by_staff(self, staff_id: str) -> List[JobService]:
         """Get all job services assigned to a staff member"""
-        jobs = await self.db.query_documents("job_services", {"assigned_to": staff_id})
-        return [JobService(**job) for job in jobs]
+        success, jobs_data, error = await self.db.query_documents("job_services", [("assigned_to", staff_id)])
+        if not success or not jobs_data:
+            return []
+        return [JobService(**job) for job in jobs_data]
 
     async def get_job_services_by_status(self, status: str) -> List[JobService]:
         """Get all job services with specific status"""
-        jobs = await self.db.query_documents("job_services", {"status": status})
-        return [JobService(**job) for job in jobs]
+        success, jobs_data, error = await self.db.query_documents("job_services", [("status", status)])
+        if not success or not jobs_data:
+            return []
+        return [JobService(**job) for job in jobs_data]
 
     async def get_all_job_services(self) -> List[JobService]:
         """Get all job services (admin only)"""
-        jobs = await self.db.get_all_documents("job_services")
-        return [JobService(**job) for job in jobs]
+        try:
+            jobs_data = await self.db.get_all_documents("job_services")
+            if not jobs_data:
+                return []
+            return [JobService(**job) for job in jobs_data]
+        except Exception as e:
+            raise ValueError(f"Failed to get job services: {str(e)}")
 
     async def _send_assignment_notification(self, recipient_id: str, job_service_id: str, title: str):
         """Send notification when job is assigned"""
