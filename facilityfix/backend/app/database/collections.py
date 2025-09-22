@@ -6,6 +6,10 @@ COLLECTIONS = {
     'user_profiles': 'user_profiles',
     'equipment': 'equipment',
     'inventory': 'inventory',
+    'inventory_transactions': 'inventory_transactions',
+    'inventory_requests': 'inventory_requests',
+    'low_stock_alerts': 'low_stock_alerts',
+    'inventory_usage_analytics': 'inventory_usage_analytics',
     'concern_slips': 'concern_slips',
     'job_services': 'job_services',
     'work_order_permits': 'work_order_permits',
@@ -14,6 +18,11 @@ COLLECTIONS = {
     'notifications': 'notifications',
     'status_history': 'status_history',
     'feedback': 'feedback',
+    'maintenance_schedules': 'maintenance_schedules',
+    'equipment_usage_logs': 'equipment_usage_logs',
+    'maintenance_templates': 'maintenance_templates',
+    'maintenance_reports': 'maintenance_reports',
+    'user_fcm_tokens': 'user_fcm_tokens',
 }
 
 # Collection Structure Documentation
@@ -44,9 +53,29 @@ COLLECTION_SCHEMAS = {
         'indexes': ['building_id', 'equipment_type', 'status']
     },
     'inventory': {
-        'fields': ['building_id', 'item_name', 'department', 'classification', 'current_stock', 'reorder_level'],
-        'required': ['building_id', 'item_name', 'department', 'current_stock'],
-        'indexes': ['building_id', 'department', 'current_stock']
+        'fields': ['building_id', 'item_name', 'item_code', 'department', 'classification', 'category', 'current_stock', 'reorder_level', 'max_stock_level', 'unit_of_measure', 'unit_cost', 'supplier_name', 'storage_location', 'is_critical', 'is_active'],
+        'required': ['building_id', 'item_name', 'department', 'classification', 'current_stock', 'reorder_level', 'unit_of_measure'],
+        'indexes': ['building_id', 'department', 'classification', 'current_stock', 'is_critical', 'is_active']
+    },
+    'inventory_transactions': {
+        'fields': ['inventory_id', 'transaction_type', 'quantity', 'previous_stock', 'new_stock', 'reference_type', 'reference_id', 'performed_by', 'reason', 'cost_per_unit', 'total_cost'],
+        'required': ['inventory_id', 'transaction_type', 'quantity', 'previous_stock', 'new_stock', 'performed_by'],
+        'indexes': ['inventory_id', 'transaction_type', 'reference_type', 'reference_id', 'performed_by', 'created_at']
+    },
+    'inventory_requests': {
+        'fields': ['inventory_id', 'requested_by', 'approved_by', 'quantity_requested', 'quantity_approved', 'purpose', 'reference_id', 'priority', 'status', 'justification'],
+        'required': ['inventory_id', 'requested_by', 'quantity_requested', 'purpose'],
+        'indexes': ['inventory_id', 'requested_by', 'approved_by', 'status', 'priority', 'created_at']
+    },
+    'low_stock_alerts': {
+        'fields': ['inventory_id', 'building_id', 'item_name', 'current_stock', 'reorder_level', 'alert_level', 'status', 'acknowledged_by'],
+        'required': ['inventory_id', 'building_id', 'item_name', 'current_stock', 'reorder_level', 'alert_level'],
+        'indexes': ['inventory_id', 'building_id', 'alert_level', 'status', 'created_at']
+    },
+    'inventory_usage_analytics': {
+        'fields': ['inventory_id', 'building_id', 'period_start', 'period_end', 'period_type', 'total_consumed', 'total_restocked', 'average_daily_usage', 'cost_consumed', 'cost_restocked'],
+        'required': ['inventory_id', 'building_id', 'period_start', 'period_end', 'period_type', 'total_consumed', 'total_restocked', 'average_daily_usage'],
+        'indexes': ['inventory_id', 'building_id', 'period_type', 'period_start', 'period_end']
     },
     'concern_slips': {
         'fields': ['reported_by', 'unit_id', 'title', 'description', 'location', 'category', 'priority', 'status', 'resolution_type', 'evaluated_by'],
@@ -87,5 +116,30 @@ COLLECTION_SCHEMAS = {
         'fields': ['work_order_id', 'request_id', 'submitted_by', 'rating', 'comments', 'service_quality', 'timeliness'],
         'required': ['work_order_id', 'request_id', 'submitted_by', 'rating'],
         'indexes': ['work_order_id', 'submitted_by', 'rating']
+    },
+    'maintenance_schedules': {
+        'fields': ['equipment_id', 'building_id', 'schedule_name', 'description', 'schedule_type', 'recurrence_pattern', 'interval_value', 'usage_threshold', 'usage_unit', 'is_active', 'priority', 'created_by', 'next_due_date'],
+        'required': ['equipment_id', 'building_id', 'schedule_name', 'description', 'schedule_type', 'created_by'],
+        'indexes': ['equipment_id', 'building_id', 'schedule_type', 'is_active', 'next_due_date', 'priority']
+    },
+    'equipment_usage_logs': {
+        'fields': ['equipment_id', 'building_id', 'usage_type', 'usage_value', 'usage_unit', 'recorded_by', 'recording_method', 'notes', 'recorded_at'],
+        'required': ['equipment_id', 'building_id', 'usage_type', 'usage_value', 'usage_unit', 'recorded_at'],
+        'indexes': ['equipment_id', 'building_id', 'usage_type', 'recorded_at', 'recorded_by']
+    },
+    'maintenance_templates': {
+        'fields': ['template_name', 'equipment_type', 'category', 'description', 'checklist_items', 'estimated_duration', 'required_skills', 'required_tools', 'required_parts', 'safety_requirements', 'created_by', 'is_active', 'version'],
+        'required': ['template_name', 'equipment_type', 'category', 'description', 'checklist_items', 'estimated_duration', 'created_by'],
+        'indexes': ['equipment_type', 'category', 'is_active', 'created_by']
+    },
+    'maintenance_reports': {
+        'fields': ['building_id', 'report_type', 'period_start', 'period_end', 'total_tasks_scheduled', 'total_tasks_completed', 'completion_rate', 'compliance_rate', 'generated_by', 'generated_at'],
+        'required': ['building_id', 'report_type', 'period_start', 'period_end', 'total_tasks_scheduled', 'total_tasks_completed', 'completion_rate', 'compliance_rate', 'generated_by', 'generated_at'],
+        'indexes': ['building_id', 'report_type', 'period_start', 'period_end', 'generated_at']
+    },
+    'user_fcm_tokens': {
+        'fields': ['user_id', 'fcm_token', 'device_info', 'is_active', 'created_at', 'updated_at'],
+        'required': ['user_id', 'fcm_token', 'is_active'],
+        'indexes': ['user_id', 'fcm_token', 'is_active', 'created_at']
     }
 }

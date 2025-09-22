@@ -4,15 +4,25 @@ from .schema_validator import schema_validator
 from .collections import COLLECTIONS
 from datetime import datetime
 import anyio
+from ..core.firebase_init import initialize_firebase, is_firebase_available
 
 class DatabaseService:
     """High-level database service with validation and error handling"""
     
     def __init__(self):
+        if not is_firebase_available():
+            initialize_firebase()
+        
         self.client = get_firestore_client()
         if not self.client:
-            raise Exception("Firestore client not available")
-        
+            print("Warning: Firestore client not available - database operations will fail")
+            self.client = None
+    
+    def _check_client_available(self):
+        """Check if Firestore client is available, raise exception if not"""
+        if not self.client:
+            raise Exception("Firestore client not available - ensure Firebase is properly initialized")
+    
     # ── helper: try to get a raw Firestore client that supports .collection() ──
     def _raw_firestore(self):
         for attr in ("db", "client", "_client"):
@@ -39,6 +49,8 @@ class DatabaseService:
             Tuple of (success, document_id_or_error, error_message)
         """
         try:
+            self._check_client_available()
+            
             # Validate schema if requested
             if validate:
                 is_valid, error_msg = schema_validator.validate_document(collection, data)
@@ -61,6 +73,8 @@ class DatabaseService:
             Tuple of (success, document_data, error_message)
         """
         try:
+            self._check_client_available()
+            
             doc_data = self.client.get_document(collection, document_id)
             if doc_data:
                 return True, doc_data, None
@@ -137,6 +151,11 @@ class DatabaseService:
         limit: optional max number of docs.
         Returns: (success, [docs], error). Each doc includes '_doc_id'.
         """
+        try:
+            self._check_client_available()
+        except Exception as e:
+            return False, [], str(e)
+        
         raw = self._raw_firestore()
 
         # If we can reach the raw client, use it (fastest & includes doc ids)
@@ -251,5 +270,8 @@ class DatabaseService:
             error_msg = f"Failed to get building data for {building_id}: {str(e)}"
             return False, {}, error_msg
 
-# Create global service instance
-database_service = DatabaseService()
+try:
+    database_service = DatabaseService()
+except Exception as e:
+    print(f"Warning: Failed to initialize database service: {e}")
+    database_service = None

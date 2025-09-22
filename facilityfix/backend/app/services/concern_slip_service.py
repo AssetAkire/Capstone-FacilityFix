@@ -37,8 +37,9 @@ class ConcernSlipService:
             "updated_at": datetime.utcnow()
         }
 
-        # Create concern slip
-        await self.db.create_document("concern_slips", concern_slip_data["id"], concern_slip_data)
+        success, doc_id, error = await self.db.create_document("concern_slips", concern_slip_data, concern_slip_data["id"])
+        if not success:
+            raise Exception(f"Failed to create concern slip: {error}")
 
         # Send notification to all admins
         await self._send_admin_notification(
@@ -47,42 +48,6 @@ class ConcernSlipService:
         )
 
         return ConcernSlip(**concern_slip_data)
-
-    async def evaluate_concern_slip(self, concern_slip_id: str, evaluated_by: str, evaluation_data: dict):
-        # Fetch concern slip (by doc ID first)
-        success, concern_slip, error = await self.db.get_document("concern_slips", concern_slip_id)
-
-        # If not found by document ID, try lookup by "id" field
-        if not success or not concern_slip:
-            success, results, error = await self.db.query_documents("concern_slips", [("id", "==", concern_slip_id)])
-            if not success or not results:
-                raise ValueError(f"Concern slip {concern_slip_id} not found")
-            concern_slip = results[0]
-            # Use the Firestore doc ID for updating
-            concern_slip_id = concern_slip.get("_doc_id", concern_slip_id)
-
-        # Build update data safely
-        update_data = {
-            "status": evaluation_data.get("status", concern_slip.get("status")),
-            "resolution_type": evaluation_data.get("resolution_type", concern_slip.get("resolution_type")),
-            "urgency_assessment": evaluation_data.get("urgency_assessment", concern_slip.get("urgency_assessment")),
-            "admin_notes": evaluation_data.get("admin_notes", concern_slip.get("admin_notes")),
-            "evaluated_by": evaluated_by,
-            "evaluated_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat()
-        }
-
-        # Save changes
-        success, error = await self.db.update_document("concern_slips", concern_slip_id, update_data)
-        if not success:
-            raise Exception(error or "Failed to update concern slip evaluation")
-
-        # Get updated slip
-        success, updated_slip, error = await self.db.get_document("concern_slips", concern_slip_id)
-        if not success or not updated_slip:
-            raise Exception(error or "Failed to retrieve updated concern slip")
-
-        return ConcernSlip(**updated_slip)
 
     async def get_concern_slip(self, concern_slip_id: str) -> Optional[ConcernSlip]:
         """Get concern slip by ID"""

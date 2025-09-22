@@ -1,45 +1,58 @@
-# app/main.py
-from fastapi import FastAPI, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-import importlib
-import traceback
 
-# Logging
+from .core.firebase_init import initialize_firebase, get_firebase_status
+
+# Initialize Firebase first
+print("🔥 Initializing Firebase for FastAPI app...")
+firebase_status = get_firebase_status()
+print(f"Firebase status: {firebase_status}")
+
+if not firebase_status['available']:
+    success = initialize_firebase()
+    if success:
+        print("✅ Firebase initialized successfully")
+    else:
+        print("⚠️ Firebase initialization failed - app will run without Firebase features")
+
+# Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("facilityfix")
+logger = logging.getLogger(__name__)
 
-# App
 app = FastAPI(
     title="FacilityFix API",
     description="Smart Maintenance and Repair Analytics Management System",
-    version="1.0.0",
+    version="1.0.0"
 )
 
-# CORS (keep permissive for dev; tighten for prod)
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],         
+    allow_origins=["*"],  # Adjust as needed for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Router loader
-def safe_include_router(router_module_path: str, router_name: str = "router") -> bool:
-    """Safely import and include a router with error handling."""
+def safe_include_router(router_module_path: str, router_name: str = "router"):
+    """Safely include a router with error handling"""
     try:
-        module = importlib.import_module(router_module_path)
+        module = __import__(router_module_path, fromlist=[router_name])
         router = getattr(module, router_name)
         app.include_router(router)
-        logger.info("✅ Included %s", router_module_path)
+        logger.info(f"✅ Successfully included {router_module_path}")
         return True
     except Exception as e:
-        logger.error("❌ Failed to include %s: %s", router_module_path, str(e))
+        logger.error(f"❌ Failed to include {router_module_path}: {str(e)}")
+        import traceback
         traceback.print_exc()
         return False
 
+# Include routers with error handling
 logger.info("Loading routers...")
+
+# Try to include each router individually
 routers_to_load = [
     ("app.routers.auth", "Authentication"),
     ("app.routers.database", "Database"),
@@ -47,55 +60,43 @@ routers_to_load = [
     ("app.routers.profiles", "Profiles"),
     ("app.routers.concern_slips", "Concern Slips"),
     ("app.routers.job_services", "Job Services"),
-    ("app.routers.work_order_permits", "Work Order Permits")
+    ("app.routers.work_order_permits", "Work Order Permits"),
+    ("app.routers.inventory", "Inventory Management"),
+    ("app.routers.maintenance_calendar", "Maintenance Calendar"),
+    ("app.routers.notifications", "Notifications"),
+    ("app.routers.websocket", "WebSocket"),
+    ("app.routers.announcements", "Announcements"),
 ]
 
-successful_routers: list[str] = []
-failed_routers: list[str] = []
+successful_routers = []
+failed_routers = []
 
-for module_path, description in routers_to_load:
-    if safe_include_router(module_path):
-        successful_routers.append(description)
+for router_path, router_description in routers_to_load:
+    if safe_include_router(router_path):
+        successful_routers.append(router_description)
     else:
-        failed_routers.append(description)
+        failed_routers.append(router_description)
 
-logger.info("Routers loaded OK: %s", successful_routers)
+logger.info(f"Successfully loaded routers: {successful_routers}")
 if failed_routers:
-    logger.warning("Routers failed: %s", failed_routers)
-
-# Root + Health + HEAD handlers (prevents '405 Method Not Allowed' on HEAD)
-@app.head("/")
-async def head_root() -> Response:
-    # Browsers/devtools often probe with HEAD; return 200 to avoid noisy 405 logs.
-    return Response(status_code=200)
+    logger.warning(f"Failed to load routers: {failed_routers}")
 
 @app.get("/")
 async def root():
+    firebase_status = get_firebase_status()
     return {
         "message": "Welcome to the FacilityFix API",
+        "firebase_status": firebase_status,
         "loaded_routers": successful_routers,
-        "failed_routers": failed_routers,
+        "failed_routers": failed_routers
     }
-
-@app.head("/health")
-async def head_health() -> Response:
-    return Response(status_code=200)
 
 @app.get("/health")
 async def health_check():
+    firebase_status = get_firebase_status()
     return {
         "status": "healthy",
+        "firebase_available": firebase_status['available'],
         "loaded_routers": len(successful_routers),
-        "failed_routers": len(failed_routers),
+        "failed_routers": len(failed_routers)
     }
-
-# (Optional) quiet preflight for /
-@app.options("/")
-async def options_root() -> Response:
-    return Response(status_code=204)
-
-# Local run helper (optional)--
-if __name__ == "__main__":
-    import uvicorn
-    # For real-device testing on the same LAN: host='0.0.0.0'
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
