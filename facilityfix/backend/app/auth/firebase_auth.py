@@ -2,28 +2,13 @@ import firebase_admin
 from firebase_admin import credentials, auth
 import os
 from typing import Optional
+from ..core.firebase_init import initialize_firebase, is_firebase_available
 
 class FirebaseAuth:
     def __init__(self):
-        if not firebase_admin._apps:
-            try:
-                service_account_path = os.getenv('FIREBASE_SERVICE_ACCOUNT_PATH', 'firebase-service-account.json')
-
-                if not os.path.exists(service_account_path):
-                    raise FileNotFoundError(f"Firebase service account file not found at {service_account_path}")
-                
-                cred = credentials.Certificate(service_account_path)
-                firebase_admin.initialize_app(cred, {
-                    'facilityfix-6d27a': os.getenv('FIREBASE_PROJECT_ID')
-                })
-                print("Firebase initialized successfully with Firestore")
-            except FileNotFoundError as e:
-                print(f"ERROR: {e}")
-                print("Please download your Firebase service account key and place it in the backend directory")
-                raise Exception("Firebase service account file missing")
-            except Exception as e:
-                print(f"Firebase initialization error: {e}")
-                raise
+        if not is_firebase_available():
+            if not initialize_firebase():
+                raise Exception("Firebase initialization failed - Auth not available")
     
     async def verify_token(self, token: str) -> Optional[dict]:
         try:

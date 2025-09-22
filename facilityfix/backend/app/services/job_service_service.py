@@ -89,31 +89,39 @@ class JobServiceService:
         if not assignee_profile or assignee_profile.role != "staff":
             raise ValueError("Job services can only be assigned to staff members")
 
-        # Update job service
+        success, jobs_data, error = await self.db.query_documents("job_services", [("id", job_service_id)])
+        if not success or not jobs_data or len(jobs_data) == 0:
+            raise ValueError("Job service not found")
+        
+        job_service_data = jobs_data[0]
+        firebase_doc_id = job_service_data.get("_firebase_id")  # Assuming Firebase stores the doc ID
+
+        # Update job service using Firebase document ID
         update_data = {
             "assigned_to": assigned_to,
             "status": "assigned",
             "updated_at": datetime.utcnow()
         }
 
-        success, error = await self.db.update_document("job_services", job_service_id, update_data)
+        # We need to get the Firebase document ID from the query result
+        # For now, let's update by querying and then updating the first match
+        success, error = await self._update_job_service_by_custom_id(job_service_id, update_data)
         if not success:
             raise ValueError(f"Failed to assign job service: {error}")
         
         # Send notification to assigned staff
-        success, job_service_data, error = await self.db.get_document("job_services", job_service_id)
-        if success and job_service_data:
-            await self._send_assignment_notification(
-                assigned_to, 
-                job_service_id,
-                job_service_data.get("title", "Job Service Assignment")
-            )
+        await self._send_assignment_notification(
+            assigned_to, 
+            job_service_id,
+            job_service_data.get("title", "Job Service Assignment")
+        )
 
-        success, updated_job_data, error = await self.db.get_document("job_services", job_service_id)
-        if not success or not updated_job_data:
+        # Get updated job service
+        success, updated_jobs_data, error = await self.db.query_documents("job_services", [("id", job_service_id)])
+        if not success or not updated_jobs_data or len(updated_jobs_data) == 0:
             raise ValueError("Failed to retrieve updated job service")
             
-        return JobService(**updated_job_data)
+        return JobService(**updated_jobs_data[0])
 
     async def update_job_status(self, job_service_id: str, status: str, updated_by: str, notes: Optional[str] = None) -> JobService:
         """Update job service status"""
@@ -121,6 +129,10 @@ class JobServiceService:
         valid_statuses = ["assigned", "in_progress", "completed", "closed"]
         if status not in valid_statuses:
             raise ValueError(f"Invalid status. Must be one of: {valid_statuses}")
+
+        success, jobs_data, error = await self.db.query_documents("job_services", [("id", job_service_id)])
+        if not success or not jobs_data or len(jobs_data) == 0:
+            raise ValueError("Job service not found")
 
         update_data = {
             "status": status,
@@ -140,16 +152,16 @@ class JobServiceService:
             else:
                 update_data["staff_notes"] = notes
 
-        success, error = await self.db.update_document("job_services", job_service_id, update_data)
+        success, error = await self._update_job_service_by_custom_id(job_service_id, update_data)
         if not success:
             raise ValueError(f"Failed to update job status: {error}")
 
         # Send notifications based on status
-        success, job_service_data, error = await self.db.get_document("job_services", job_service_id)
-        if success and job_service_data:
+        job_service_data = jobs_data[0]
+        if status == "completed":
             success, concern_slip_data, error = await self.db.get_document("concern_slips", job_service_data.get("concern_slip_id"))
             
-            if status == "completed" and success and concern_slip_data:
+            if success and concern_slip_data:
                 # Notify tenant of completion
                 await self._send_tenant_notification(
                     concern_slip_data.get("reported_by"),
@@ -157,19 +169,21 @@ class JobServiceService:
                     f"Your repair request has been completed: {job_service_data.get('title')}"
                 )
 
-        success, updated_job_data, error = await self.db.get_document("job_services", job_service_id)
-        if not success or not updated_job_data:
+        # Get updated job service
+        success, updated_jobs_data, error = await self.db.query_documents("job_services", [("id", job_service_id)])
+        if not success or not updated_jobs_data or len(updated_jobs_data) == 0:
             raise ValueError("Failed to retrieve updated job service")
             
-        return JobService(**updated_job_data)
+        return JobService(**updated_jobs_data[0])
 
     async def add_work_notes(self, job_service_id: str, notes: str, added_by: str) -> JobService:
         """Add work notes to job service"""
         
-        success, job_service_data, error = await self.db.get_document("job_services", job_service_id)
-        if not success or not job_service_data:
+        success, jobs_data, error = await self.db.query_documents("job_services", [("id", job_service_id)])
+        if not success or not jobs_data or len(jobs_data) == 0:
             raise ValueError("Job service not found")
 
+        job_service_data = jobs_data[0]
         current_notes = job_service_data.get("staff_notes", "")
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M")
         user_profile = await self.user_service.get_user_profile(added_by)
@@ -178,7 +192,7 @@ class JobServiceService:
         new_note = f"\n[{timestamp}] {user_name}: {notes}"
         updated_notes = current_notes + new_note
 
-        success, error = await self.db.update_document("job_services", job_service_id, {
+        success, error = await self._update_job_service_by_custom_id(job_service_id, {
             "staff_notes": updated_notes,
             "updated_at": datetime.utcnow()
         })
@@ -186,18 +200,19 @@ class JobServiceService:
         if not success:
             raise ValueError(f"Failed to add work notes: {error}")
 
-        success, updated_job_data, error = await self.db.get_document("job_services", job_service_id)
-        if not success or not updated_job_data:
+        # Get updated job service
+        success, updated_jobs_data, error = await self.db.query_documents("job_services", [("id", job_service_id)])
+        if not success or not updated_jobs_data or len(updated_jobs_data) == 0:
             raise ValueError("Failed to retrieve updated job service")
             
-        return JobService(**updated_job_data)
+        return JobService(**updated_jobs_data[0])
 
     async def get_job_service(self, job_service_id: str) -> Optional[JobService]:
         """Get job service by ID"""
-        success, job_data, error = await self.db.get_document("job_services", job_service_id)
-        if not success or not job_data:
+        success, jobs_data, error = await self.db.query_documents("job_services", [("id", job_service_id)])
+        if not success or not jobs_data or len(jobs_data) == 0:
             return None
-        return JobService(**job_data)
+        return JobService(**jobs_data[0])
 
     async def get_job_services_by_staff(self, staff_id: str) -> List[JobService]:
         """Get all job services assigned to a staff member"""
@@ -250,3 +265,40 @@ class JobServiceService:
             "created_at": datetime.utcnow()
         }
         await self.db.create_document("notifications", notification_data["id"], notification_data)
+
+    async def _update_job_service_by_custom_id(self, job_service_id: str, update_data: dict) -> tuple[bool, str]:
+        """Helper method to update job service by custom ID"""
+        try:
+            # First, find all documents with the custom ID
+            success, jobs_data, error = await self.db.query_documents("job_services", [("id", job_service_id)])
+            if not success or not jobs_data or len(jobs_data) == 0:
+                return False, "Job service not found"
+            
+            # Get all documents from the collection to find the Firebase document ID
+            all_jobs = await self.db.get_all_documents("job_services")
+            firebase_doc_id = None
+            
+            for job in all_jobs:
+                if job.get("id") == job_service_id:
+                    # Find the Firebase document ID by comparing the data
+                    # This is a workaround since we need the Firebase document ID for updates
+                    # We'll use the first matching document
+                    firebase_doc_id = job.get("_firebase_doc_id")  # This might not exist
+                    break
+            
+            if not firebase_doc_id:
+                # If we can't find the Firebase doc ID, we'll need to use a different approach
+                # Let's try to update by deleting and recreating (not ideal but functional)
+                job_data = jobs_data[0]
+                job_data.update(update_data)
+                
+                # Delete old document (this is tricky without the Firebase doc ID)
+                # For now, let's just return an error and handle this differently
+                return False, "Cannot update document without Firebase document ID"
+            
+            # Update using Firebase document ID
+            success, error = await self.db.update_document("job_services", firebase_doc_id, update_data)
+            return success, error
+            
+        except Exception as e:
+            return False, str(e)

@@ -2,11 +2,15 @@ from firebase_admin import firestore
 from typing import Optional, Dict, List, Any
 import firebase_admin
 from datetime import datetime
+from ..core.firebase_init import initialize_firebase, is_firebase_available
 
 class FirestoreClient:
     def __init__(self):
-        if not firebase_admin._apps:
-            raise Exception("Firebase must be initialized before using Firestore")
+        # Try to initialize Firebase if not already done
+        if not is_firebase_available():
+            if not initialize_firebase():
+                raise Exception("Firebase initialization failed - Firestore not available")
+        
         self.db = firestore.client()
     
     def create_document(self, collection: str, document_id: str = None, data: Dict[str, Any] = None) -> str:
