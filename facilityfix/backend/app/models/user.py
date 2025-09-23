@@ -1,35 +1,44 @@
-from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional, List
+from __future__ import annotations
+
+from pydantic import BaseModel, EmailStr, Field, validator, root_validator
+from typing import Optional, List, Dict
 from enum import Enum
 from datetime import datetime
 import re
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Enums
+# ──────────────────────────────────────────────────────────────────────────────
 
 class UserRole(str, Enum):
     ADMIN = "admin"
     STAFF = "staff"
     TENANT = "tenant"
 
+
 class UserStatus(str, Enum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     SUSPENDED = "suspended"
 
-class StaffClassification(str, Enum):
-    MAINTENANCE = "maintenance"
-    CARPENTRY = "carpentry"
-    PLUMBING = "plumbing"
-    ELECTRICAL = "electrical"
-    MASONRY = "masonry"
 
-class BuildingCode(str, Enum):
-    A = "A"
-    B = "B"
-    C = "C"
+class StaffDepartment(str, Enum):
+    MAINTENANCE = "maintenance"
+    CARPENTRY   = "carpentry"
+    PLUMBING    = "plumbing"
+    ELECTRICAL  = "electrical"
+    MASONRY     = "masonry"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Legacy login payloads (kept for back-compat with old screens)
+# ──────────────────────────────────────────────────────────────────────────────
 
 class AdminLogin(BaseModel):
     userEmail: EmailStr
     userId: str = Field(..., description="Admin user ID (e.g., A-0001)")
     userPassword: str
+
 
 class StaffLogin(BaseModel):
     userEmail: EmailStr
@@ -37,152 +46,220 @@ class StaffLogin(BaseModel):
     userDepartment: str = Field(..., description="Staff department")
     userPassword: str
 
+
 class TenantLogin(BaseModel):
     userEmail: EmailStr
     userId: str = Field(..., description="Tenant user ID (e.g., T-0001)")
-    buildingUnitNo: str = Field(..., description="Building unit number (e.g., A-01)")
+    buildingUnitNo: str = Field(..., description="Building unit (e.g., A-01)")
     userPassword: str
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Registration payloads — camelCase for app, fold legacy to these keys
+# ──────────────────────────────────────────────────────────────────────────────
 
 class AdminCreate(BaseModel):
     firstName: str = Field(..., min_length=1)
-    lastName: str = Field(..., min_length=1)
-    birthDate: datetime = Field(..., description="Date of birth")
-    userEmail: EmailStr
-    contactNumber: str = Field(..., description="Phone number")
-    userPassword: str = Field(..., min_length=6)
+    lastName:  str = Field(..., min_length=1)
+    email: EmailStr
+    password: str   = Field(..., min_length=6)
+    phoneNumber: str  # REQUIRED
+    birthDate: str = Field(..., description="Birth date as YYYY-MM-DD")  # REQUIRED
+
+    @root_validator(pre=True)
+    def _fold_legacy(cls, v: Dict) -> Dict:
+        v.setdefault("firstName", v.get("first_name"))
+        v.setdefault("lastName", v.get("last_name"))
+        v.setdefault("email", v.get("userEmail") or v.get("email"))
+        v.setdefault("password", v.get("userPassword") or v.get("password"))
+        v.setdefault("phoneNumber", v.get("contactNumber") or v.get("phone_number"))
+        v.setdefault("birthDate", v.get("birth_date") or v.get("birthDate"))
+        return v
+
 
 class StaffCreate(BaseModel):
     firstName: str = Field(..., min_length=1)
-    lastName: str = Field(..., min_length=1)
-    birthDate: datetime = Field(..., description="Date of birth")
-    staffDepartment: str = Field(..., description="Staff department")
-    userEmail: EmailStr
-    contactNumber: str = Field(..., description="Phone number")
-    userPassword: str = Field(..., min_length=6)
+    lastName:  str = Field(..., min_length=1)
+    email: EmailStr
+    password: str   = Field(..., min_length=6)
+    staffDepartment: StaffDepartment
+    phoneNumber: str  # REQUIRED
+    birthDate: str = Field(..., description="Birth date as YYYY-MM-DD")  # REQUIRED
+
+    @root_validator(pre=True)
+    def _fold_department_keys(cls, v: Dict) -> Dict:
+        v.setdefault("firstName", v.get("first_name"))
+        v.setdefault("lastName", v.get("last_name"))
+        v.setdefault("email", v.get("userEmail") or v.get("email"))
+        v.setdefault("password", v.get("userPassword") or v.get("password"))
+        v.setdefault("phoneNumber", v.get("contactNumber") or v.get("phone_number"))
+        v.setdefault("birthDate", v.get("birth_date") or v.get("birthDate"))
+
+        # accept any legacy key but map to staffDepartment
+        dept = v.get("staffDepartment") or v.get("department") or v.get("staff_department") or v.get("classification")
+        if dept:
+            v["staffDepartment"] = dept
+        return v
+
 
 class TenantCreate(BaseModel):
     firstName: str = Field(..., min_length=1)
-    lastName: str = Field(..., min_length=1)
-    birthDate: datetime = Field(..., description="Date of birth")
-    buildingUnitNo: str = Field(..., description="Building unit (e.g., A-01)")
-    userEmail: EmailStr
-    contactNumber: str = Field(..., description="Phone number")
-    userPassword: str = Field(..., min_length=6)
+    lastName:  str = Field(..., min_length=1)
+    email: EmailStr
+    password: str   = Field(..., min_length=6)
+    phoneNumber: str  # REQUIRED
+    birthDate: str = Field(..., description="Birth date as YYYY-MM-DD")  # REQUIRED
+    buildingUnit: str = Field(..., description="Normalized as 'A-00005'")
 
-    @validator('buildingUnitNo')
-    def validate_building_unit(cls, v):
-        # Validate format: Letter-Number (e.g., A-01, B-15, C-23)
-        pattern = r'^[ABC]-\d{2}$'
-        if not re.match(pattern, v):
-            raise ValueError('Building unit must be in format A-01, B-15, or C-23 (buildings A, B, C only)')
-        return v.upper()
+    @root_validator(pre=True)
+    def _map_bu_variants(cls, v: Dict) -> Dict:
+        v.setdefault("firstName", v.get("first_name"))
+        v.setdefault("lastName", v.get("last_name"))
+        v.setdefault("email", v.get("userEmail") or v.get("email"))
+        v.setdefault("password", v.get("userPassword") or v.get("password"))
+        v.setdefault("phoneNumber", v.get("contactNumber") or v.get("phone_number"))
+        v.setdefault("birthDate", v.get("birth_date") or v.get("birthDate"))
+
+        bu = v.get("buildingUnit") or v.get("building_unit") or v.get("buildingUnitId") or v.get("buildingUnitNo")
+        if bu is not None:
+            v["buildingUnit"] = bu
+        return v
+
+    @validator("buildingUnit", pre=True)
+    def _normalize_building_unit(cls, raw: str) -> str:
+        if not isinstance(raw, str):
+            raise ValueError("buildingUnit must be a string")
+        s = raw.strip().upper()
+        m = re.match(r"^([A-Z])\-?(\d{1,5})$", s)
+        if not m:
+            raise ValueError("buildingUnit must be like 'A-5' or 'A-00005'")
+        letter = m.group(1)
+        unit   = m.group(2).zfill(5)
+        return f"{letter}-{unit}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Generic auth/login
+# ──────────────────────────────────────────────────────────────────────────────
 
 class UserLogin(BaseModel):
     identifier: str = Field(..., description="Email or User ID (e.g., T-0001)")
     password: str
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Core user models (camelCase for app)
+# ──────────────────────────────────────────────────────────────────────────────
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
-    first_name: str
-    last_name: str
-    phone_number: Optional[str] = None
+    firstName: str
+    lastName: str
+    phoneNumber: str
     role: UserRole
-    building_id: Optional[str] = None
-    unit_id: Optional[str] = None
-    department: Optional[str] = None
-    # New fields for role-specific data
-    staff_id: Optional[str] = None
-    classification: Optional[StaffClassification] = None
-    building_unit: Optional[str] = None
-    
+    buildingId: Optional[str] = None
+    unitId: Optional[str] = None
+    staffDepartment: Optional[str] = None
+    staffId: Optional[str] = None
+    buildingUnit: Optional[str] = None
+    birthDate: str
+
+
 class UserResponse(BaseModel):
     uid: str
-    user_id: str  # Custom user ID like T-0001, S-0001, A-0001
+    userId: str
     email: str
-    first_name: str
-    last_name: str
+    firstName: str
+    lastName: str
     role: UserRole
-    phone_number: Optional[str] = None
-    building_id: Optional[str] = None
-    unit_id: Optional[str] = None
-    department: Optional[str] = None
-    # Role-specific fields
-    staff_id: Optional[str] = None
-    classification: Optional[StaffClassification] = None
-    building_unit: Optional[str] = None
+    phoneNumber: str
+    buildingId: Optional[str] = None
+    unitId: Optional[str] = None
+    staffDepartment: Optional[str] = None
+    staffId: Optional[str] = None
+    buildingUnit: Optional[str] = None
     status: Optional[UserStatus] = UserStatus.ACTIVE
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    createdAt: Optional[datetime] = None
+    updatedAt: Optional[datetime] = None
+    birthDate: str
+
 
 class UserUpdate(BaseModel):
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    phone_number: Optional[str] = None
-    department: Optional[str] = None
-    building_id: Optional[str] = None
-    unit_id: Optional[str] = None
-    classification: Optional[StaffClassification] = None
-    building_unit: Optional[str] = None
+    firstName: Optional[str] = None
+    lastName: Optional[str] = None
+    phoneNumber: Optional[str] = None
+    buildingId: Optional[str] = None
+    unitId: Optional[str] = None
+    staffDepartment: Optional[str] = None
+    buildingUnit: Optional[str] = None
+    birthDate: Optional[str] = None
 
-    @validator('building_unit')
-    def validate_building_unit(cls, v):
+    @validator("buildingUnit")
+    def _validate_building_unit_optional(cls, v: Optional[str]) -> Optional[str]:
         if v is not None:
-            pattern = r'^[ABC]-\d{2}$'
-            if not re.match(pattern, v):
-                raise ValueError('Building unit must be in format A-01, B-15, or C-23')
-            return v.upper()
+            vs = v.strip().upper()
+            if not vs:
+                raise ValueError("buildingUnit, if provided, must be non-empty")
+            return vs
         return v
+
 
 class UserStatusUpdate(BaseModel):
     status: UserStatus
 
+
 class PasswordChange(BaseModel):
-    new_password: str = Field(..., min_length=6, description="New password (minimum 6 characters)")
+    newPassword: str = Field(..., min_length=6, description="New password (minimum 6 characters)")
+
 
 class UserSearchFilters(BaseModel):
     role: Optional[UserRole] = None
-    building_id: Optional[str] = None
+    buildingId: Optional[str] = None
     status: Optional[UserStatus] = None
-    department: Optional[str] = None
-    search_term: Optional[str] = Field(None, description="Search in name, email, or department")
+    staffDepartment: Optional[str] = None
+    searchTerm: Optional[str] = Field(None, description="Search in name, email, or department")
+
 
 class UserListResponse(BaseModel):
     users: List[UserResponse]
-    total_count: int
+    totalCount: int
     page: int
-    page_size: int
-    total_pages: int
+    pageSize: int
+    totalPages: int
+
 
 class BulkUserOperation(BaseModel):
-    user_ids: List[str]
-    operation: str # "activate", "deactivate", "delete"
+    userIds: List[str]
+    operation: str  # "activate", "deactivate", "delete"
+
 
 class UserStatistics(BaseModel):
-    total_users: int
-    by_role: dict
-    by_status: dict
-    by_building: dict
-    recent_registrations: int # in the last 30 days
+    totalUsers: int
+    byRole: dict
+    byStatus: dict
+    byBuilding: dict
+    recentRegistrations: int  # in the last 30 days
+
 
 class UserProfileComplete(BaseModel):
     """Complete user profile with Firebase and Firestore data"""
     uid: str
-    user_id: str  # Added custom user ID field
+    userId: str
     email: str
-    email_verified: bool
-    first_name: str
-    last_name: str
-    phone_number: Optional[str] = None
+    emailVerified: bool
+    firstName: str
+    lastName: str
+    phoneNumber: str
     role: UserRole
     status: UserStatus
-    building_id: Optional[str] = None
-    unit_id: Optional[str] = None
-    department: Optional[str] = None
-    staff_id: Optional[str] = None
-    classification: Optional[StaffClassification] = None
-    building_unit: Optional[str] = None
-    last_sign_in: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    firebase_metadata: Optional[dict] = None
+    buildingId: Optional[str] = None
+    unitId: Optional[str] = None
+    staffDepartment: Optional[str] = None
+    staffId: Optional[str] = None
+    buildingUnit: Optional[str] = None
+    birthDate: str
+    lastSignIn: Optional[datetime] = None
+    createdAt: Optional[datetime] = None
+    updatedAt: Optional[datetime] = None
+    firebaseMetadata: Optional[dict] = None
