@@ -1,5 +1,5 @@
 from typing import Dict, List, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.database.firestore_client import FirestoreClient
 from app.services.concern_slip_service import ConcernSlipService
 from app.services.job_service_service import JobServiceService
@@ -17,12 +17,12 @@ class AnalyticsService:
         try:
             # Get counts for different statuses
             pending_concerns = await self.concern_service.get_pending_concern_slips()
-            active_jobs = await self.job_service.get_jobs_by_status("in_progress")
+            active_jobs = await self.job_service.get_job_services_by_status("in_progress")
             pending_permits = await self.permit_service.get_permits_by_status("pending")
             
             # Calculate completion rates
             total_concerns = await self.concern_service.get_all_concern_slips()
-            completed_jobs = await self.job_service.get_jobs_by_status("completed")
+            completed_jobs = await self.job_service.get_job_services_by_status("completed")
             
             completion_rate = (len(completed_jobs) / len(total_concerns) * 100) if total_concerns else 0
             
@@ -40,22 +40,29 @@ class AnalyticsService:
     async def get_work_order_trends(self, days: int = 30) -> Dict[str, Any]:
         """Get work order trends over specified period"""
         try:
-            end_date = datetime.now()
+            end_date = datetime.now(timezone.utc)
             start_date = end_date - timedelta(days=days)
             
             # Get all concern slips in date range
             all_concerns = await self.concern_service.get_all_concern_slips()
             
-            # Filter by date range
-            filtered_concerns = [
-                concern for concern in all_concerns
-                if start_date <= concern.created_at <= end_date
-            ]
+            # Filter by date range with proper timezone handling
+            filtered_concerns = []
+            for concern in all_concerns:
+                concern_date = concern.created_at
+                if concern_date.tzinfo is None:
+                    concern_date = concern_date.replace(tzinfo=timezone.utc)
+                
+                if start_date <= concern_date <= end_date:
+                    filtered_concerns.append(concern)
             
             # Group by day
             daily_counts = {}
             for concern in filtered_concerns:
-                date_key = concern.created_at.strftime("%Y-%m-%d")
+                concern_date = concern.created_at
+                if concern_date.tzinfo is None:
+                    concern_date = concern_date.replace(tzinfo=timezone.utc)
+                date_key = concern_date.strftime("%Y-%m-%d")
                 daily_counts[date_key] = daily_counts.get(date_key, 0) + 1
             
             return {

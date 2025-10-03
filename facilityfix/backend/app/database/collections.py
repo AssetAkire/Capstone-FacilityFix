@@ -23,6 +23,8 @@ COLLECTIONS = {
     'maintenance_templates': 'maintenance_templates',
     'maintenance_reports': 'maintenance_reports',
     'user_fcm_tokens': 'user_fcm_tokens',
+    'file_attachments': 'file_attachments',
+    'counters': 'counters',
 }
 
 # Collection Structure Documentation
@@ -78,9 +80,9 @@ COLLECTION_SCHEMAS = {
         'indexes': ['inventory_id', 'building_id', 'period_type', 'period_start', 'period_end']
     },
     'concern_slips': {
-        'fields': ['reported_by', 'unit_id', 'title', 'description', 'location', 'category', 'priority', 'status', 'resolution_type', 'evaluated_by'],
-        'required': ['reported_by', 'title', 'description', 'location', 'category'],
-        'indexes': ['status', 'priority', 'reported_by', 'category', 'resolution_type']
+        'fields': ['reported_by', 'unit_id', 'title', 'description', 'location', 'category', 'priority', 'status', 'resolution_type', 'evaluated_by', 'formatted_id'],
+        'required': ['reported_by', 'title', 'description', 'location', 'category', 'formatted_id'],
+        'indexes': ['status', 'priority', 'reported_by', 'category', 'resolution_type', 'formatted_id']
     },
     'job_services': {
         'fields': ['concern_slip_id', 'created_by', 'assigned_to', 'title', 'description', 'location', 'category', 'priority', 'status', 'scheduled_date', 'completed_at'],
@@ -141,5 +143,15 @@ COLLECTION_SCHEMAS = {
         'fields': ['user_id', 'fcm_token', 'device_info', 'is_active', 'created_at', 'updated_at'],
         'required': ['user_id', 'fcm_token', 'is_active'],
         'indexes': ['user_id', 'fcm_token', 'is_active', 'created_at']
-    }
+    },
+    'file_attachments': {
+        'fields': ['file_path', 'original_filename', 'file_size', 'content_type', 'entity_type', 'entity_id', 'uploaded_by', 'file_type', 'description', 'storage_url', 'is_active'],
+        'required': ['file_path', 'original_filename', 'file_size', 'content_type', 'entity_type', 'entity_id', 'uploaded_by'],
+        'indexes': ['entity_type', 'entity_id', 'uploaded_by', 'is_active', 'created_at']
+    },
+    'counters': {
+        'fields': ['year', 'counter', 'last_updated'],
+        'required': ['year', 'counter'],
+        'indexes': ['year']
+    },
 }

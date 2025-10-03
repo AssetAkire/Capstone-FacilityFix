@@ -62,4 +62,3 @@ async def delete_notification(
         return {"message": "Notification deleted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete notification: {str(e)}")
-
