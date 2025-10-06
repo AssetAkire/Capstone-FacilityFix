@@ -11,11 +11,7 @@ class ViewDetailsPage extends StatefulWidget {
   final String? selectedTabLabel;
   final String? requestType;
 
-  const ViewDetailsPage({
-    super.key,
-    this.selectedTabLabel,
-    this.requestType,
-  });
+  const ViewDetailsPage({super.key, this.selectedTabLabel, this.requestType});
 
   @override
   State<ViewDetailsPage> createState() => _ViewDetailsPageState();
@@ -53,9 +49,10 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
         .replaceAll(RegExp(r'[_\-]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ');
 
-    final raw = (widget.selectedTabLabel?.trim().isNotEmpty ?? false)
-        ? widget.selectedTabLabel!
-        : (widget.requestType ?? '');
+    final raw =
+        (widget.selectedTabLabel?.trim().isNotEmpty ?? false)
+            ? widget.selectedTabLabel!
+            : (widget.requestType ?? '');
     final label = normalize(raw);
 
     switch (label) {
@@ -78,8 +75,12 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
             scheduleAvailability: "August 19, 2025 2:30 PM",
 
             // Request Details (description is required)
-            description: "I’d like to report a clogged drainage issue in the bathroom.",
-            attachments: const ["assets/images/upload1.png","assets/images/upload2.png"],
+            description:
+                "I’d like to report a clogged drainage issue in the bathroom.",
+            attachments: const [
+              "assets/images/upload1.png",
+              "assets/images/upload2.png",
+            ],
 
             // Optional CTA
             actionLabel: null,
@@ -106,8 +107,12 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
             scheduleAvailability: "August 19, 2025 2:30 PM",
 
             // Request Details (description is required)
-            description: "I’d like to report a clogged drainage issue in the bathroom.",
-            attachments: const ["assets/images/upload1.png","assets/images/upload2.png"],
+            description:
+                "I’d like to report a clogged drainage issue in the bathroom.",
+            attachments: const [
+              "assets/images/upload1.png",
+              "assets/images/upload2.png",
+            ],
 
             // Assignment
             assignedTo: 'Juan Dela Cruz',
@@ -138,8 +143,12 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
             scheduleAvailability: "August 19, 2025 2:30 PM",
 
             // Request Details
-            description: "I’d like to report a clogged drainage issue in the bathroom.",
-            attachments: const ["assets/images/upload1.png","assets/images/upload2.png"],
+            description:
+                "I’d like to report a clogged drainage issue in the bathroom.",
+            attachments: const [
+              "assets/images/upload1.png",
+              "assets/images/upload2.png",
+            ],
 
             // Assessed By
             initialAssigneeName: 'Juan Dela Cruz',
@@ -148,7 +157,8 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
 
             // Assessment and Recommendation
             initialAssessment: 'Drainage is clogged due to accumulated debris.',
-            initialRecommendation: 'Perform professional cleaning; consider replacing the drainage cover.',
+            initialRecommendation:
+                'Perform professional cleaning; consider replacing the drainage cover.',
             initialAssessedAttachments: const ["assets/images/upload2.png"],
 
             actionLabel: null,
@@ -214,8 +224,10 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
             completionAssigneeDepartment: 'Plumbing',
             completionDateAssessed: 'August 20, 2025 9:00 AM',
 
-            completionAssessment: 'Drainage is clogged due to accumulated debris.',
-            completionRecommendation: 'Perform professional cleaning; consider replacing the drainage cover.',
+            completionAssessment:
+                'Drainage is clogged due to accumulated debris.',
+            completionRecommendation:
+                'Perform professional cleaning; consider replacing the drainage cover.',
             completionAssessedAttachments: const ["assets/images/upload2.png"],
 
             actionLabel: null,
@@ -254,7 +266,8 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
             contractorNumber: '+63 917 555 1234',
 
             // Additional Notes
-            workOrderNotes: "AC unit is not cooling effectively; inspection requested.",
+            workOrderNotes:
+                "AC unit is not cooling effectively; inspection requested.",
 
             actionLabel: null,
             onAction: null,
@@ -272,7 +285,8 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
             classification: 'Utility Interruption',
 
             // AAnnouncement Details
-            description: 'Water supply will be interrupted due to mainline repair.',
+            description:
+                'Water supply will be interrupted due to mainline repair.',
             locationAffected: 'Building A & B',
 
             // Schedule Information
@@ -303,10 +317,7 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
         title: 'View Details',
         leading: const Row(
           children: [
-            Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: BackButton(),
-            ),
+            Padding(padding: EdgeInsets.only(right: 8), child: BackButton()),
           ],
         ),
         showMore: true,
@@ -316,7 +327,12 @@ class _ViewDetailsPageState extends State<ViewDetailsPage> {
         child: Stack(
           children: [
             SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(24, 24, 24, payload.hasCta ? 120 : 24),
+              padding: EdgeInsets.fromLTRB(
+                24,
+                24,
+                24,
+                payload.hasCta ? 120 : 24,
+              ),
               child: payload.child,
             ),
             if (payload.hasCta)
@@ -349,11 +365,7 @@ class _DetailsPayload {
   final String? ctaLabel;
   final VoidCallback? onCtaPressed;
 
-  const _DetailsPayload({
-    required this.child,
-    this.ctaLabel,
-    this.onCtaPressed,
-  });
+  const _DetailsPayload({required this.child});
 
   bool get hasCta => ctaLabel != null && onCtaPressed != null;
 }

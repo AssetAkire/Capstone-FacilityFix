@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/webusers_viewdetails_popup.dart';
+import '../services/api_service.dart';
 
 class AdminUserPage extends StatefulWidget {
   const AdminUserPage({super.key});
@@ -17,51 +18,35 @@ class _AdminUserPageState extends State<AdminUserPage> {
   String _selectedStatusFilter = 'All Status';
   List<bool> _selectedRows = [];
 
-  // ---- Sample User Data ----
-  final List<Map<String, dynamic>> _allUsers = [
-    {
-      'id': 1,
-      'name': 'Noel Cruz',
-      'role': 'Admin',
-      'department': 'HVAC',
-      'status': 'Online',
-      'email': 'noel.cruz@facility.com',
-      'lastActive': '2 min ago'
-    },
-    {
-      'id': 2,
-      'name': 'Juan Dela Cruz',
-      'role': 'Staff',
-      'department': 'Maintenance',
-      'status': 'Offline',
-      'email': 'juan.delacruz@facility.com',
-      'lastActive': '5 min ago'
-    },
-    {
-      'id': 3,
-      'name': 'Erika De Guzman',
-      'role': 'Tenant',
-      'department': '',
-      'status': 'Pending',
-      'email': 'erika.deguzman@tenant.com',
-      'lastActive': '2 hours ago'
-    },
-  ];
+  final ApiService _apiService = ApiService();
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  List<Map<String, dynamic>> _allUsers = [];
 
   // ---- Filtered Users List ----
   List<Map<String, dynamic>> get _filteredUsers {
     return _allUsers.where((user) {
       // Search filter
-      bool matchesSearch = _searchController.text.isEmpty ||
-          user['name'].toString().toLowerCase().contains(_searchController.text.toLowerCase()) ||
-          user['email'].toString().toLowerCase().contains(_searchController.text.toLowerCase());
-      
+      bool matchesSearch =
+          _searchController.text.isEmpty ||
+          user['name'].toString().toLowerCase().contains(
+            _searchController.text.toLowerCase(),
+          ) ||
+          user['email'].toString().toLowerCase().contains(
+            _searchController.text.toLowerCase(),
+          );
+
       // Role filter
-      bool matchesRole = _selectedRoleFilter == 'All Roles' || user['role'] == _selectedRoleFilter;
-      
+      bool matchesRole =
+          _selectedRoleFilter == 'All Roles' ||
+          user['role'] == _selectedRoleFilter;
+
       // Status filter
-      bool matchesStatus = _selectedStatusFilter == 'All Status' || user['status'] == _selectedStatusFilter;
-      
+      bool matchesStatus =
+          _selectedStatusFilter == 'All Status' ||
+          user['status'] == _selectedStatusFilter;
+
       return matchesSearch && matchesRole && matchesStatus;
     }).toList();
   }
@@ -69,8 +54,119 @@ class _AdminUserPageState extends State<AdminUserPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize selection state
-    _selectedRows = List.generate(_allUsers.length, (index) => false);
+    _fetchUsers();
+  }
+
+  Future<void> _fetchUsers() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      print('[v0] Fetching users from backend...');
+      final users = await _apiService.getUsers();
+
+      print('[v0] Received ${users.length} users from backend');
+
+      // Map backend response to frontend format
+      final mappedUsers =
+          users.map((user) {
+            // Determine status display text
+            String statusDisplay = _mapStatus(user['status'] ?? 'active');
+
+            // Build full name
+            String fullName =
+                '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}'.trim();
+            if (fullName.isEmpty) {
+              fullName = user['email'] ?? 'Unknown User';
+            }
+
+            // Determine role display text
+            String roleDisplay = _capitalizeRole(user['role'] ?? 'tenant');
+
+            // Get department
+            String department =
+                user['department'] ??
+                user['staff_department'] ??
+                user['building_unit'] ??
+                '';
+
+            return {
+              'id': user['user_id'] ?? user['id'],
+              'name': fullName,
+              'role': roleDisplay,
+              'department': department,
+              'status': statusDisplay,
+              'email': user['email'] ?? '',
+              'lastActive': _formatLastActive(user['updated_at']),
+              // Store original data for detail view
+              '_raw': user,
+            };
+          }).toList();
+
+      setState(() {
+        _allUsers = mappedUsers;
+        _selectedRows = List.generate(_allUsers.length, (index) => false);
+        _isLoading = false;
+      });
+
+      print('[v0] Successfully loaded ${_allUsers.length} users');
+    } catch (e) {
+      print('[v0] Error fetching users: $e');
+      setState(() {
+        _errorMessage = 'Failed to load users: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _mapStatus(String backendStatus) {
+    switch (backendStatus.toLowerCase()) {
+      case 'active':
+        return 'Online';
+      case 'inactive':
+        return 'Offline';
+      case 'suspended':
+        return 'Pending';
+      default:
+        return 'Offline';
+    }
+  }
+
+  String _capitalizeRole(String role) {
+    if (role.isEmpty) return 'Tenant';
+    return role[0].toUpperCase() + role.substring(1).toLowerCase();
+  }
+
+  String _formatLastActive(dynamic updatedAt) {
+    if (updatedAt == null) return 'Never';
+
+    try {
+      DateTime date;
+      if (updatedAt is String) {
+        date = DateTime.parse(updatedAt);
+      } else if (updatedAt is DateTime) {
+        date = updatedAt;
+      } else {
+        return 'Unknown';
+      }
+
+      final now = DateTime.now();
+      final difference = now.difference(date);
+
+      if (difference.inMinutes < 1) {
+        return 'Just now';
+      } else if (difference.inMinutes < 60) {
+        return '${difference.inMinutes} min ago';
+      } else if (difference.inHours < 24) {
+        return '${difference.inHours} hours ago';
+      } else {
+        return '${difference.inDays} days ago';
+      }
+    } catch (e) {
+      return 'Unknown';
+    }
   }
 
   @override
@@ -124,7 +220,12 @@ class _AdminUserPageState extends State<AdminUserPage> {
   }
 
   // ---- Filter Dropdown Builder ----
-  Widget _buildFilterDropdown(String label, String value, List<String> options, Function(String) onChanged) {
+  Widget _buildFilterDropdown(
+    String label,
+    String value,
+    List<String> options,
+    Function(String) onChanged,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -136,12 +237,16 @@ class _AdminUserPageState extends State<AdminUserPage> {
         child: DropdownButton<String>(
           value: value,
           isDense: true,
-          items: options.map((String option) {
-            return DropdownMenuItem<String>(
-              value: option,
-              child: Text('$label: $option', style: const TextStyle(fontSize: 14)),
-            );
-          }).toList(),
+          items:
+              options.map((String option) {
+                return DropdownMenuItem<String>(
+                  value: option,
+                  child: Text(
+                    '$label: $option',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                );
+              }).toList(),
           onChanged: (String? newValue) {
             if (newValue != null) {
               onChanged(newValue);
@@ -153,20 +258,20 @@ class _AdminUserPageState extends State<AdminUserPage> {
   }
 
   // ---- Role Styles ----
-final Map<String, Map<String, Color>> roleStyles = {
-  'Admin': {
-    'bg': Color(0xFFDDEAFE), // light blue
-    'text': Color(0xFF1D4ED8), // dark blue
-  },
-  'Staff': {
-    'bg': Color(0xFFE5E7EB), // light gray
-    'text': Color(0xFF374151), // dark gray
-  },
-  'Tenant': {
-    'bg': Color(0xFFFEF9C3), // light yellow
-    'text': Color(0xFFB45309), // orange
-  },
-};
+  final Map<String, Map<String, Color>> roleStyles = {
+    'Admin': {
+      'bg': Color(0xFFDDEAFE), // light blue
+      'text': Color(0xFF1D4ED8), // dark blue
+    },
+    'Staff': {
+      'bg': Color(0xFFE5E7EB), // light gray
+      'text': Color(0xFF374151), // dark gray
+    },
+    'Tenant': {
+      'bg': Color(0xFFFEF9C3), // light yellow
+      'text': Color(0xFFB45309), // orange
+    },
+  };
 
   // ---- Status Styles ----
   final Map<String, Map<String, Color>> statusStyles = {
@@ -190,7 +295,8 @@ final Map<String, Map<String, Color>> roleStyles = {
 
   // ---- Role Badge Widget ----
   Widget _buildRoleBadge(String role) {
-    final style = roleStyles[role] ??
+    final style =
+        roleStyles[role] ??
         {'bg': Colors.grey.shade200, 'text': Colors.grey.shade700};
 
     return Container(
@@ -212,7 +318,8 @@ final Map<String, Map<String, Color>> roleStyles = {
 
   // ---- Status Badge Widget ----
   Widget _buildStatusBadge(String status) {
-    final style = statusStyles[status] ??
+    final style =
+        statusStyles[status] ??
         {'bg': Colors.grey.shade200, 'text': Colors.grey.shade700};
 
     return Container(
@@ -233,8 +340,13 @@ final Map<String, Map<String, Color>> roleStyles = {
   }
 
   // ---- User Actions Menu ----
-  void _showActionMenu(BuildContext context, Map<String, dynamic> user, Offset position) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  void _showActionMenu(
+    BuildContext context,
+    Map<String, dynamic> user,
+    Offset position,
+  ) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
 
     final bool isPending = user['status'] == 'Pending';
 
@@ -249,9 +361,16 @@ final Map<String, Map<String, Color>> roleStyles = {
           value: 'view',
           child: Row(
             children: [
-              Icon(Icons.visibility_outlined, color: Colors.green[600], size: 18),
+              Icon(
+                Icons.visibility_outlined,
+                color: Colors.green[600],
+                size: 18,
+              ),
               const SizedBox(width: 12),
-              Text("View", style: TextStyle(color: Colors.green[600], fontSize: 14)),
+              Text(
+                "View",
+                style: TextStyle(color: Colors.green[600], fontSize: 14),
+              ),
             ],
           ),
         ),
@@ -261,9 +380,16 @@ final Map<String, Map<String, Color>> roleStyles = {
             value: 'approve',
             child: Row(
               children: [
-                Icon(Icons.check_circle_outline, color: Colors.blue[600], size: 18),
+                Icon(
+                  Icons.check_circle_outline,
+                  color: Colors.blue[600],
+                  size: 18,
+                ),
                 const SizedBox(width: 12),
-                Text("Approve", style: TextStyle(color: Colors.blue[600], fontSize: 14)),
+                Text(
+                  "Approve",
+                  style: TextStyle(color: Colors.blue[600], fontSize: 14),
+                ),
               ],
             ),
           ),
@@ -271,21 +397,30 @@ final Map<String, Map<String, Color>> roleStyles = {
             value: 'reject',
             child: Row(
               children: [
-                Icon(Icons.cancel_outlined, color: Colors.orange[600], size: 18),
+                Icon(
+                  Icons.cancel_outlined,
+                  color: Colors.orange[600],
+                  size: 18,
+                ),
                 const SizedBox(width: 12),
-                Text("Reject", style: TextStyle(color: Colors.orange[600], fontSize: 14)),
+                Text(
+                  "Reject",
+                  style: TextStyle(color: Colors.orange[600], fontSize: 14),
+                ),
               ],
             ),
           ),
-        ]
-        else ...[
+        ] else ...[
           PopupMenuItem(
             value: 'edit',
             child: Row(
               children: [
                 Icon(Icons.edit_outlined, color: Colors.blue[600], size: 18),
                 const SizedBox(width: 12),
-                Text("Edit", style: TextStyle(color: Colors.blue[600], fontSize: 14)),
+                Text(
+                  "Edit",
+                  style: TextStyle(color: Colors.blue[600], fontSize: 14),
+                ),
               ],
             ),
           ),
@@ -296,7 +431,10 @@ final Map<String, Map<String, Color>> roleStyles = {
             children: [
               Icon(Icons.delete_outline, color: Colors.red[600], size: 18),
               const SizedBox(width: 12),
-              Text("Delete", style: TextStyle(color: Colors.red[600], fontSize: 14)),
+              Text(
+                "Delete",
+                style: TextStyle(color: Colors.red[600], fontSize: 14),
+              ),
             ],
           ),
         ),
@@ -317,21 +455,11 @@ final Map<String, Map<String, Color>> roleStyles = {
         break;
 
       case 'approve':
-        setState(() {
-          user['status'] = 'Active';
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("${user['name']} approved")),
-        );
+        _updateUserStatus(user, 'active', 'Online');
         break;
 
       case 'reject':
-        setState(() {
-          user['status'] = 'Rejected'; 
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("${user['name']} rejected")),
-        );
+        _updateUserStatus(user, 'suspended', 'Rejected');
         break;
 
       case 'edit':
@@ -341,16 +469,71 @@ final Map<String, Map<String, Color>> roleStyles = {
         break;
 
       case 'delete':
-        setState(() {
-          //_users.remove(user);
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Deleted user: ${user['name']}")),
-        );
+        _deleteUser(user);
         break;
     }
   }
 
+  Future<void> _updateUserStatus(
+    Map<String, dynamic> user,
+    String backendStatus,
+    String displayStatus,
+  ) async {
+    try {
+      final userId = user['id'];
+      print('[v0] Updating user $userId status to $backendStatus');
+
+      await _apiService.updateUserStatus(userId, backendStatus);
+
+      setState(() {
+        user['status'] = displayStatus;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("${user['name']} status updated")),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error updating user status: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to update user status: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteUser(Map<String, dynamic> user) async {
+    try {
+      final userId = user['id'];
+      print('[v0] Deleting user $userId');
+
+      await _apiService.deleteUser(userId, permanent: false);
+
+      // Refresh the user list
+      await _fetchUsers();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Deleted user: ${user['name']}")),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error deleting user: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to delete user: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -412,7 +595,6 @@ final Map<String, Map<String, Color>> roleStyles = {
                   ),
                   child: const Text('Users'),
                 ),
-                
               ],
             ),
             const SizedBox(height: 32),
@@ -461,9 +643,19 @@ final Map<String, Map<String, Color>> roleStyles = {
                 ),
                 const SizedBox(width: 16),
 
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _fetchUsers,
+                  tooltip: 'Refresh',
+                ),
+                const SizedBox(width: 8),
+
                 // Filter Button
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(8),
@@ -487,7 +679,9 @@ final Map<String, Map<String, Color>> roleStyles = {
                   onPressed: () {
                     // TODO: Implement export functionality
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Export feature coming soon!')),
+                      const SnackBar(
+                        content: Text('Export feature coming soon!'),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.download, size: 18),
@@ -495,12 +689,13 @@ final Map<String, Map<String, Color>> roleStyles = {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.grey.shade700,
                     side: BorderSide(color: Colors.grey.shade300),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
-
-                
               ],
             ),
             const SizedBox(height: 32),
@@ -508,148 +703,288 @@ final Map<String, Map<String, Color>> roleStyles = {
             // ---- Users Table ----
             Flexible(
               fit: FlexFit.loose,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Table Header
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          topRight: Radius.circular(12),
+              child:
+                  _isLoading
+                      ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Loading users...',
+                              style: TextStyle(color: Colors.grey.shade600),
+                            ),
+                          ],
                         ),
-                      ),
-                      child: const Row(
-                        children: [
-                          SizedBox(width: 40), // Checkbox space
-                          Expanded(flex: 3, child: Text('USER', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
-                          Expanded(flex: 2, child: Text('ROLE', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
-                          Expanded(flex: 2, child: Text('DEPARTMENT', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
-                          Expanded(flex: 2, child: Text('STATUS', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12))),
-                          SizedBox(width: 48), // Actions space
-                        ],
-                      ),
-                    ),
-
-                    // Table Body
-                    Flexible(
-                      fit: FlexFit.loose,
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: filteredUsers.length,
-                        itemBuilder: (context, index) {
-                          final user = filteredUsers[index];
-                          return Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(color: Colors.grey.shade100),
+                      )
+                      : _errorMessage != null
+                      ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: Colors.red.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              _errorMessage!,
+                              style: TextStyle(color: Colors.red.shade700),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: _fetchUsers,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                      : Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Table Header
+                            Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(12),
+                                  topRight: Radius.circular(12),
+                                ),
+                              ),
+                              child: const Row(
+                                children: [
+                                  SizedBox(width: 40), // Checkbox space
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      'USER',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      'ROLE',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      'DEPARTMENT',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      'STATUS',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(width: 48), // Actions space
+                                ],
                               ),
                             ),
-                            child: Row(
-                              children: [
-                                // Checkbox
-                                Checkbox(
-                                  value: index < _selectedRows.length ? _selectedRows[index] : false,
-                                  onChanged: (bool? value) {
-                                    setState(() {
-                                      if (index < _selectedRows.length) {
-                                        _selectedRows[index] = value ?? false;
-                                      }
-                                    });
-                                  },
-                                ),
-                                
-                                // User Info
-                                Expanded(
-                                  flex: 3,
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        user['name'],
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          fontSize: 14,
+
+                            // Table Body
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child:
+                                  filteredUsers.isEmpty
+                                      ? Center(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(32),
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.people_outline,
+                                                size: 48,
+                                                color: Colors.grey.shade400,
+                                              ),
+                                              const SizedBox(height: 16),
+                                              Text(
+                                                'No users found',
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade600,
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
+                                      )
+                                      : ListView.builder(
+                                        shrinkWrap: true,
+                                        itemCount: filteredUsers.length,
+                                        itemBuilder: (context, index) {
+                                          final user = filteredUsers[index];
+                                          return Container(
+                                            padding: const EdgeInsets.all(16),
+                                            decoration: BoxDecoration(
+                                              border: Border(
+                                                bottom: BorderSide(
+                                                  color: Colors.grey.shade100,
+                                                ),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                // Checkbox
+                                                Checkbox(
+                                                  value:
+                                                      index <
+                                                              _selectedRows
+                                                                  .length
+                                                          ? _selectedRows[index]
+                                                          : false,
+                                                  onChanged: (bool? value) {
+                                                    setState(() {
+                                                      if (index <
+                                                          _selectedRows
+                                                              .length) {
+                                                        _selectedRows[index] =
+                                                            value ?? false;
+                                                      }
+                                                    });
+                                                  },
+                                                ),
+
+                                                // User Info
+                                                Expanded(
+                                                  flex: 3,
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        user['name'],
+                                                        style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w500,
+                                                          fontSize: 14,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        user['email'],
+                                                        style: TextStyle(
+                                                          color:
+                                                              Colors
+                                                                  .grey
+                                                                  .shade600,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+
+                                                // Role Badge
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    child: _buildRoleBadge(
+                                                      user['role'],
+                                                    ),
+                                                  ),
+                                                ),
+
+                                                // Department
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Text(
+                                                    user['department'].isEmpty
+                                                        ? '-'
+                                                        : user['department'],
+                                                    style: const TextStyle(
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ),
+
+                                                // Status Badge
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: Align(
+                                                    alignment:
+                                                        Alignment.centerLeft,
+                                                    child: _buildStatusBadge(
+                                                      user['status'],
+                                                    ),
+                                                  ),
+                                                ),
+
+                                                // Actions Button
+                                                Builder(
+                                                  builder: (context) {
+                                                    return IconButton(
+                                                      icon: const Icon(
+                                                        Icons.more_vert,
+                                                        color: Colors.grey,
+                                                        size: 20,
+                                                      ),
+                                                      onPressed: () {
+                                                        final rbx =
+                                                            context.findRenderObject()
+                                                                as RenderBox;
+                                                        final position = rbx
+                                                            .localToGlobal(
+                                                              Offset.zero,
+                                                            );
+                                                        _showActionMenu(
+                                                          context,
+                                                          user,
+                                                          position,
+                                                        );
+                                                      },
+                                                    );
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        user['email'],
-                                        style: TextStyle(
-                                          color: Colors.grey.shade600,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                // Role Badge
-                                Expanded(
-                                  flex: 2,
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: _buildRoleBadge(user['role']),
-                                  ),
-                                ),
-
-                                // Department
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    user['department'].isEmpty ? '-' : user['department'],
-                                    style: const TextStyle(fontSize: 14),
-                                  ),
-                                ),
-
-                                // Status Badge
-                                Expanded(
-                                  flex: 2,
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: _buildStatusBadge(user['status']),
-                                  ),
-                                ),
-
-                                // Actions Button
-                                Builder(
-                                  builder: (context) {
-                                    return IconButton(
-                                      icon: const Icon(Icons.more_vert, color: Colors.grey, size: 20),
-                                      onPressed: () {
-                                        final rbx = context.findRenderObject() as RenderBox;
-                                        final position = rbx.localToGlobal(Offset.zero);
-                                        _showActionMenu(context, user, position);
-                                      },
-                                    );
-                                  },
-                                ),
-
-                              ],
                             ),
-                          );
-                        },
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
             ),
 
             // ---- Pagination ----
@@ -659,10 +994,7 @@ final Map<String, Map<String, Color>> roleStyles = {
               children: [
                 Text(
                   'Showing 1 to ${filteredUsers.length} of ${filteredUsers.length} entries',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                 ),
                 Row(
                   children: [
@@ -673,7 +1005,10 @@ final Map<String, Map<String, Color>> roleStyles = {
                       },
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.blue,
                         borderRadius: BorderRadius.circular(6),

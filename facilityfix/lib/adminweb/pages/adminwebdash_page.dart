@@ -3,6 +3,8 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
+import '../services/api_service.dart';
+import '../../services/auth_storage.dart';
 
 class AdminWebDashPage extends StatefulWidget {
   const AdminWebDashPage({super.key});
@@ -14,6 +16,70 @@ class AdminWebDashPage extends StatefulWidget {
 class _AdminWebDashPageState extends State<AdminWebDashPage> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+
+  final ApiService _apiService = ApiService();
+
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  // Dashboard stats from API
+  Map<String, dynamic>? _dashboardStats;
+  List<dynamic> _concernSlips = [];
+  List<dynamic> _maintenanceTasks = [];
+  Map<String, dynamic>? _workOrderTrends;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDashboardData();
+  }
+
+  Future<void> _fetchDashboardData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final token = await AuthStorage.getToken();
+      if (token != null && token.isNotEmpty) {
+        _apiService.setAuthToken(token);
+        print('[v0] Auth token retrieved and set in API service');
+      } else {
+        print('[v0] Warning: No auth token found in storage');
+      }
+
+      // Fetch dashboard stats
+      final stats = await _apiService.getDashboardStats();
+
+      // Fetch concern slips (for repair tasks table)
+      final concernSlips = await _apiService.getAllConcernSlips();
+
+      // Fetch work order trends (for chart)
+      final trends = await _apiService.getWorkOrderTrends(days: 7);
+
+      // Fetch maintenance tasks (for schedule section)
+      // Note: You'll need to replace 'default-building-id' with actual building ID
+      final maintenanceTasks = await _apiService.getMaintenanceTasks(
+        buildingId: 'default-building-id',
+        status: 'scheduled',
+      );
+
+      setState(() {
+        _dashboardStats = stats;
+        _concernSlips = concernSlips;
+        _workOrderTrends = trends;
+        _maintenanceTasks = maintenanceTasks['tasks'] ?? [];
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load dashboard data: $e';
+        _isLoading = false;
+      });
+      print('[v0] Error fetching dashboard data: $e');
+    }
+  }
 
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
@@ -68,7 +134,11 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
   ];
 
   // Fixed width cell helper
-  Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
+  Widget _fixedCell(
+    int i,
+    Widget child, {
+    Alignment align = Alignment.centerLeft,
+  }) {
     return SizedBox(
       width: _colW[i],
       child: Align(alignment: align, child: child),
@@ -88,7 +158,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isLargeScreen = screenWidth > 1200;
-    
+
     return FacilityFixLayout(
       currentRoute: 'dashboard',
       onNavigate: (routeKey) {
@@ -99,208 +169,225 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
           _handleLogout(context);
         }
       },
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(isLargeScreen ? 24 : 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // TOP ROW: STATISTICS CARDS SECTION
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 800) {
-                  // Stack cards vertically on smaller screens (Mobile/Tablet)
-                  return Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard(
-                              'ACTIVE WORK\nORDERS',
-                              '20',
-                              '12 high priority',
-                              '8%',
-                              Colors.blue,
-                              Icons.work_outline,
-                              isIncrease: true,
-                              routeKey: 'work_maintenance',
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildStatCard(
-                              'SCHEDULED\nMAINTENANCE',
-                              '5',
-                              'tasks this week',
-                              'overdue: 3',
-                              Colors.green,
-                              Icons.schedule,
-                              isIncrease: false,
-                              routeKey: 'work_maintenance',
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildStatCard(
-                              'SCHEDULED REPAIR\nTASKS',
-                              '40',
-                              'This month',
-                              '12%',
-                              Colors.blue,
-                              Icons.build_outlined,
-                              isIncrease: true,
-                              routeKey: 'work_repair',
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildStatCard(
-                              'COMPLETED TASKS',
-                              '86',
-                              'This month',
-                              '12%',
-                              Colors.red,
-                              Icons.check_circle_outline,
-                              isIncrease: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  );
-                } else {
-                  // Show all cards in a row on larger screens (Desktop)
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          'ACTIVE WORK\nORDERS',
-                          '20',
-                          '12 high priority',
-                          '8%',
-                          Colors.blue,
-                          Icons.work_outline,
-                          isIncrease: true,
-                          routeKey: 'work_maintenance',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          'SCHEDULED\nMAINTENANCE',
-                          '5',
-                          'tasks this week',
-                          'overdue: 3',
-                          Colors.green,
-                          Icons.schedule,
-                          isIncrease: false,
-                          routeKey: 'work_maintenance',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          'SCHEDULED REPAIR\nTASKS',
-                          '40',
-                          'This month',
-                          '12%',
-                          Colors.blue,
-                          Icons.build_outlined,
-                          isIncrease: true,
-                          routeKey: 'work_repair',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          'COMPLETED TASKS',
-                          '86',
-                          'This month',
-                          '12%',
-                          Colors.red,
-                          Icons.check_circle_outline,
-                          isIncrease: true,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 24),
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
+              ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
+                    const SizedBox(height: 16),
+                    Text(
+                      _errorMessage!,
+                      style: TextStyle(color: Colors.red[700]),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _fetchDashboardData,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+              : SingleChildScrollView(
+                padding: EdgeInsets.all(isLargeScreen ? 24 : 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // TOP ROW: STATISTICS CARDS SECTION
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth < 800) {
+                          // Stack cards vertically on smaller screens (Mobile/Tablet)
+                          return Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      'ACTIVE WORK\nORDERS',
+                                      '${_dashboardStats?['active_jobs'] ?? 0}',
+                                      '${_dashboardStats?['pending_concerns'] ?? 0} pending',
+                                      '${_dashboardStats?['completion_rate'] ?? 0}%',
+                                      Colors.blue,
+                                      Icons.work_outline,
+                                      isIncrease: true,
+                                      routeKey: 'work_maintenance',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      'SCHEDULED\nMAINTENANCE',
+                                      '${_maintenanceTasks.length}',
+                                      'tasks this week',
+                                      '',
+                                      Colors.green,
+                                      Icons.schedule,
+                                      isIncrease: false,
+                                      routeKey: 'work_maintenance',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      'SCHEDULED REPAIR\nTASKS',
+                                      '${_concernSlips.length}',
+                                      'This month',
+                                      '',
+                                      Colors.blue,
+                                      Icons.build_outlined,
+                                      isIncrease: true,
+                                      routeKey: 'work_repair',
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildStatCard(
+                                      'TOTAL REQUESTS',
+                                      '${_dashboardStats?['total_requests'] ?? 0}',
+                                      'All time',
+                                      '',
+                                      Colors.red,
+                                      Icons.check_circle_outline,
+                                      isIncrease: true,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          );
+                        } else {
+                          // Show all cards in a row on larger screens (Desktop)
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: _buildStatCard(
+                                  'ACTIVE WORK\nORDERS',
+                                  '${_dashboardStats?['active_jobs'] ?? 0}',
+                                  '${_dashboardStats?['pending_concerns'] ?? 0} pending',
+                                  '${_dashboardStats?['completion_rate'] ?? 0}%',
+                                  Colors.blue,
+                                  Icons.work_outline,
+                                  isIncrease: true,
+                                  routeKey: 'work_maintenance',
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildStatCard(
+                                  'SCHEDULED\nMAINTENANCE',
+                                  '${_maintenanceTasks.length}',
+                                  'tasks this week',
+                                  '',
+                                  Colors.green,
+                                  Icons.schedule,
+                                  isIncrease: false,
+                                  routeKey: 'work_maintenance',
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildStatCard(
+                                  'SCHEDULED REPAIR\nTASKS',
+                                  '${_concernSlips.length}',
+                                  'This month',
+                                  '',
+                                  Colors.blue,
+                                  Icons.build_outlined,
+                                  isIncrease: true,
+                                  routeKey: 'work_repair',
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildStatCard(
+                                  'TOTAL REQUESTS',
+                                  '${_dashboardStats?['total_requests'] ?? 0}',
+                                  'All time',
+                                  '',
+                                  Colors.red,
+                                  Icons.check_circle_outline,
+                                  isIncrease: true,
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
 
-            // MIDDLE ROW: REPAIR TASKS TABLE + CALENDAR
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 1000) {
-                  // Stack vertically on smaller screens
-                  return Column(
-                    children: [
-                      _buildRepairTaskTable(),
-                      const SizedBox(height: 20),
-                      _buildMaintenanceCalendar(),
-                    ],
-                  );
-                } else {
-                  // Side by side on larger screens
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: _buildRepairTaskTable(),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        flex: 1,
-                        child: _buildMaintenanceCalendar(),
-                      ),
-                    ],
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 24),
+                    // MIDDLE ROW: REPAIR TASKS TABLE + CALENDAR
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth < 1000) {
+                          // Stack vertically on smaller screens
+                          return Column(
+                            children: [
+                              _buildRepairTaskTable(),
+                              const SizedBox(height: 20),
+                              _buildMaintenanceCalendar(),
+                            ],
+                          );
+                        } else {
+                          // Side by side on larger screens
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 2, child: _buildRepairTaskTable()),
+                              const SizedBox(width: 20),
+                              Expanded(
+                                flex: 1,
+                                child: _buildMaintenanceCalendar(),
+                              ),
+                            ],
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
 
-            // ============================================
-            // BOTTOM ROW: MAINTENANCE SCHEDULE + CHART
-            // ============================================
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 1000) {
-                  // Stack vertically on smaller screens
-                  return Column(
-                    children: [
-                      _buildMaintenanceSchedule(),
-                      const SizedBox(height: 20),
-                      _buildRepairChart(),
-                    ],
-                  );
-                } else {
-                  // Side by side on larger screens
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 1,
-                        child: _buildMaintenanceSchedule(),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        flex: 2,
-                        child: _buildRepairChart(),
-                      ),
-                    ],
-                  );
-                }
-              },
-            ),
-          ],
-        ),
-      ),
+                    // ============================================
+                    // BOTTOM ROW: MAINTENANCE SCHEDULE + CHART
+                    // ============================================
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth < 1000) {
+                          // Stack vertically on smaller screens
+                          return Column(
+                            children: [
+                              _buildMaintenanceSchedule(),
+                              const SizedBox(height: 20),
+                              _buildRepairChart(),
+                            ],
+                          );
+                        } else {
+                          // Side by side on larger screens
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 1,
+                                child: _buildMaintenanceSchedule(),
+                              ),
+                              const SizedBox(width: 20),
+                              Expanded(flex: 2, child: _buildRepairChart()),
+                            ],
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
     );
   }
 
@@ -315,7 +402,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
     Color color,
     IconData icon, {
     bool isIncrease = true,
-    String? routeKey, 
+    String? routeKey,
   }) {
     return InkWell(
       onTap: () {
@@ -328,8 +415,8 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        height: 140, 
-        padding: const EdgeInsets.all(18), 
+        height: 140,
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -353,7 +440,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   child: Text(
                     title,
                     style: TextStyle(
-                      fontSize: 11, 
+                      fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: Colors.grey[600],
                       height: 1.2,
@@ -363,32 +450,28 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.all(8), 
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Icon(
-                    icon,
-                    color: color,
-                    size: 18,
-                  ),
+                  child: Icon(icon, color: color, size: 18),
                 ),
               ],
             ),
             const Spacer(),
-            
+
             // Main Value
             Text(
               value,
               style: const TextStyle(
-                fontSize: 32, 
+                fontSize: 32,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
             ),
             const SizedBox(height: 4),
-            
+
             // Bottom Row: Percentage and Subtitle
             Row(
               children: [
@@ -397,13 +480,13 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   Icon(
                     isIncrease ? Icons.trending_up : Icons.trending_down,
                     color: isIncrease ? Colors.green : Colors.red,
-                    size: 14, 
+                    size: 14,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     percentage,
                     style: TextStyle(
-                      fontSize: 11, 
+                      fontSize: 11,
                       color: isIncrease ? Colors.green : Colors.red,
                       fontWeight: FontWeight.w500,
                     ),
@@ -415,9 +498,9 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   child: Text(
                     subtitle,
                     style: TextStyle(
-                      fontSize: 11, 
+                      fontSize: 11,
                       color: Colors.grey[600],
-                      height: 1.3, 
+                      height: 1.3,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -435,48 +518,47 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
   // REPAIR TASKS TABLE WIDGET
   // ============================================
   Widget _buildRepairTaskTable() {
-    final tasks = [
-      {
-        'task': 'Clogged Drainage',
-        'priority': 'High',
-        'name': 'Juan Dela Cruz',
-        'status': 'In Progress',
-        'priorityColor': Colors.red,
-        'statusColor': Colors.green,
-      },
-      {
-        'task': 'Faulty Light Switch',
-        'priority': 'Medium',
-        'name': 'Arman Reyes',
-        'status': 'In Review',
-        'priorityColor': Colors.orange,
-        'statusColor': Colors.orange,
-      },
-      {
-        'task': 'Door Lock Issue',
-        'priority': 'High',
-        'name': 'Joel Ramirez',
-        'status': 'Completed',
-        'priorityColor': Colors.red,
-        'statusColor': Colors.pink,
-      },
-      {
-        'task': 'Broken Cabinet',
-        'priority': 'Low',
-        'name': 'Leo Manalo',
-        'status': 'In Review',
-        'priorityColor': Colors.green,
-        'statusColor': Colors.orange,
-      },
-      {
-        'task': 'Water Leak',
-        'priority': 'High',
-        'name': 'Marian Lim',
-        'status': 'In Progress',
-        'priorityColor': Colors.red,
-        'statusColor': Colors.green,
-      },
-    ];
+    final tasks =
+        _concernSlips.take(5).map((slip) {
+          // Map concern slip data to table format
+          final priority = slip['priority'] ?? 'medium';
+          final status = slip['status'] ?? 'pending';
+
+          Color priorityColor;
+          switch (priority.toLowerCase()) {
+            case 'high':
+            case 'critical':
+              priorityColor = Colors.red;
+              break;
+            case 'medium':
+              priorityColor = Colors.orange;
+              break;
+            default:
+              priorityColor = Colors.green;
+          }
+
+          Color statusColor;
+          switch (status.toLowerCase()) {
+            case 'completed':
+              statusColor = Colors.pink;
+              break;
+            case 'in_progress':
+            case 'assigned':
+              statusColor = Colors.green;
+              break;
+            default:
+              statusColor = Colors.orange;
+          }
+
+          return {
+            'task': slip['description'] ?? 'No description',
+            'priority': priority.toString().toUpperCase(),
+            'name': slip['assigned_to'] ?? 'Unassigned',
+            'status': status.toString().replaceAll('_', ' ').toUpperCase(),
+            'priorityColor': priorityColor,
+            'statusColor': statusColor,
+          };
+        }).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -526,130 +608,169 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
               ],
             ),
             const SizedBox(height: 16),
-            
-            // Data Table
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minWidth: MediaQuery.of(context).size.width * 0.4,
+
+            if (tasks.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Center(
+                  child: Text(
+                    'No repair tasks available',
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
-                child: 
-                DataTable(
-                  columnSpacing: 40,
-                  dataRowMinHeight: 65,
-                  dataRowMaxHeight: 65,
-                  columns: [
-                    DataColumn(label: _fixedCell(0, Text(
-                      'Task',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ))),
-                    DataColumn(label: _fixedCell(1, Text(
-                      'Priority',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ))),
-                    DataColumn(label: _fixedCell(2, Text(
-                      'Name',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ))),
-                    DataColumn(label: _fixedCell(3, Text(
-                      'Status',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
-                    ))),
-                  ],
-                  rows: tasks.map((task) {
-                    return DataRow(
-                      cells: [
-                        // TASK (fixed width + ellipsis)
-                        DataCell(
-                          _fixedCell(
-                            0,
-                            _ellipsis(
-                              task['task'] as String,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                                fontSize: 14,
-                              ),
+              )
+            else
+              // Data Table
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width * 0.4,
+                  ),
+                  child: DataTable(
+                    columnSpacing: 40,
+                    dataRowMinHeight: 65,
+                    dataRowMaxHeight: 65,
+                    columns: [
+                      DataColumn(
+                        label: _fixedCell(
+                          0,
+                          Text(
+                            'Task',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                              fontSize: 14,
                             ),
                           ),
                         ),
-
-                        // PRIORITY 
-                        DataCell(
-                          _fixedCell(
-                            1,
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: (task['priorityColor'] as Color).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                task['priority'] as String,
-                                style: TextStyle(
-                                  color: task['priorityColor'] as Color,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 12,
+                      ),
+                      DataColumn(
+                        label: _fixedCell(
+                          1,
+                          Text(
+                            'Priority',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: _fixedCell(
+                          2,
+                          Text(
+                            'Name',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      DataColumn(
+                        label: _fixedCell(
+                          3,
+                          Text(
+                            'Status',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    rows:
+                        tasks.map((task) {
+                          return DataRow(
+                            cells: [
+                              // TASK (fixed width + ellipsis)
+                              DataCell(
+                                _fixedCell(
+                                  0,
+                                  _ellipsis(
+                                    task['task'] as String,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 14,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ),
 
-                        // NAME (fixed width + ellipsis)
-                        DataCell(
-                          _fixedCell(
-                            2,
-                            _ellipsis(
-                              task['name'] as String,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                          ),
-                        ),
-
-                        // STATUS 
-                        DataCell(
-                          _fixedCell(
-                            3,
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: (task['statusColor'] as Color).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                task['status'] as String,
-                                style: TextStyle(
-                                  color: task['statusColor'] as Color,
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: 12,
+                              // PRIORITY
+                              DataCell(
+                                _fixedCell(
+                                  1,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: (task['priorityColor'] as Color)
+                                          .withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      task['priority'] as String,
+                                      style: TextStyle(
+                                        color: task['priorityColor'] as Color,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
+
+                              // NAME (fixed width + ellipsis)
+                              DataCell(
+                                _fixedCell(
+                                  2,
+                                  _ellipsis(
+                                    task['name'] as String,
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                ),
+                              ),
+
+                              // STATUS
+                              DataCell(
+                                _fixedCell(
+                                  3,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: (task['statusColor'] as Color)
+                                          .withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(
+                                      task['status'] as String,
+                                      style: TextStyle(
+                                        color: task['statusColor'] as Color,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -680,10 +801,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
           children: [
             const Text(
               'Maintenance Calendar',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
             TableCalendar<void>(
@@ -736,7 +854,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
               },
             ),
             const SizedBox(height: 16),
-            
+
             // Calendar Legend
             Row(
               children: [
@@ -749,10 +867,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Repair Tasks',
-                  style: TextStyle(fontSize: 12),
-                ),
+                const Text('Repair Tasks', style: TextStyle(fontSize: 12)),
                 const SizedBox(width: 16),
                 Container(
                   width: 12,
@@ -763,10 +878,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Maintenance',
-                  style: TextStyle(fontSize: 12),
-                ),
+                const Text('Maintenance', style: TextStyle(fontSize: 12)),
               ],
             ),
           ],
@@ -779,18 +891,14 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
   // MAINTENANCE SCHEDULE WIDGET
   // ============================================
   Widget _buildMaintenanceSchedule() {
-    final schedules = [
-      {
-        'title': 'Light Inspection',
-        'assignee': 'Arman Reyes',
-        'date': 'July 1, 2025',
-      },
-      {
-        'title': 'Pest Control',
-        'assignee': 'Juan Dela Cruz',
-        'date': '2025-07-30',
-      },
-    ];
+    final schedules =
+        _maintenanceTasks.take(2).map((task) {
+          return {
+            'title': task['task_title'] ?? 'Maintenance Task',
+            'assignee': task['assigned_to'] ?? 'Unassigned',
+            'date': task['scheduled_date'] ?? DateTime.now().toString(),
+          };
+        }).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -829,7 +937,9 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   ],
                 ),
                 TextButton(
-                  onPressed: () {context.go('/calendar');},
+                  onPressed: () {
+                    context.go('/calendar');
+                  },
                   child: const Text(
                     'Calendar',
                     style: TextStyle(color: Colors.blue),
@@ -838,9 +948,21 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
               ],
             ),
             const SizedBox(height: 24),
-            
-            // Schedule Items
-            ...schedules.map((schedule) => Container(
+
+            if (schedules.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(32.0),
+                child: Center(
+                  child: Text(
+                    'No maintenance schedules available',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              )
+            else
+              // Schedule Items
+              ...schedules.map(
+                (schedule) => Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -855,7 +977,9 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.green.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(4),
@@ -909,14 +1033,17 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                       ),
                     ],
                   ),
-                )),
+                ),
+              ),
             const SizedBox(height: 2),
-            
+
             // Add New Schedule Button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {context.go('/work/maintenance');},
+                onPressed: () {
+                  context.go('/work/maintenance');
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
@@ -945,6 +1072,24 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
   // REPAIR CHART WIDGET
   // ============================================
   Widget _buildRepairChart() {
+    final dailyBreakdown =
+        _workOrderTrends?['daily_breakdown'] as Map<String, dynamic>? ?? {};
+
+    // Convert daily breakdown to chart data points
+    List<FlSpot> repairSpots = [];
+    List<FlSpot> maintenanceSpots = [];
+
+    // Get last 7 days of data
+    for (int i = 0; i < 7; i++) {
+      final date = DateTime.now().subtract(Duration(days: 6 - i));
+      final dateKey = date.toString().split(' ')[0];
+      final count = dailyBreakdown[dateKey] ?? 0;
+
+      // For demo, split between repair and maintenance
+      repairSpots.add(FlSpot(i.toDouble(), (count * 0.4).toDouble()));
+      maintenanceSpots.add(FlSpot(i.toDouble(), (count * 0.6).toDouble()));
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -969,14 +1114,13 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
               children: [
                 const Text(
                   'Repair and Maintenance',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.blue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(16),
@@ -1004,7 +1148,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
               ],
             ),
             const SizedBox(height: 24),
-            
+
             //linechart
             SizedBox(
               height: 300,
@@ -1015,10 +1159,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                     drawVerticalLine: false,
                     horizontalInterval: 5,
                     getDrawingHorizontalLine: (value) {
-                      return FlLine(
-                        color: Colors.grey[200]!,
-                        strokeWidth: 1,
-                      );
+                      return FlLine(color: Colors.grey[200]!, strokeWidth: 1);
                     },
                   ),
                   titlesData: FlTitlesData(
@@ -1100,15 +1241,18 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   lineBarsData: [
                     // Repair Tasks line (green)
                     LineChartBarData(
-                      spots: const [
-                        FlSpot(0, 3),
-                        FlSpot(1, 8),
-                        FlSpot(2, 2),
-                        FlSpot(3, 6),
-                        FlSpot(4, 4),
-                        FlSpot(5, 12),
-                        FlSpot(6, 5),
-                      ],
+                      spots:
+                          repairSpots.isNotEmpty
+                              ? repairSpots
+                              : const [
+                                FlSpot(0, 3),
+                                FlSpot(1, 8),
+                                FlSpot(2, 2),
+                                FlSpot(3, 6),
+                                FlSpot(4, 4),
+                                FlSpot(5, 12),
+                                FlSpot(6, 5),
+                              ],
                       isCurved: true,
                       gradient: LinearGradient(
                         colors: [Colors.green.withOpacity(0.8), Colors.green],
@@ -1117,27 +1261,31 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                       isStrokeCapRound: true,
                       dotData: FlDotData(
                         show: true,
-                        getDotPainter: (spot, percent, barData, index) =>
-                            FlDotCirclePainter(
-                          radius: 4,
-                          color: Colors.green,
-                          strokeWidth: 2,
-                          strokeColor: Colors.white,
-                        ),
+                        getDotPainter:
+                            (spot, percent, barData, index) =>
+                                FlDotCirclePainter(
+                                  radius: 4,
+                                  color: Colors.green,
+                                  strokeWidth: 2,
+                                  strokeColor: Colors.white,
+                                ),
                       ),
                       belowBarData: BarAreaData(show: false),
                     ),
                     // Maintenance line (blue)
                     LineChartBarData(
-                      spots: const [
-                        FlSpot(0, 8),
-                        FlSpot(1, 12),
-                        FlSpot(2, 6),
-                        FlSpot(3, 14),
-                        FlSpot(4, 10),
-                        FlSpot(5, 16),
-                        FlSpot(6, 10),
-                      ],
+                      spots:
+                          maintenanceSpots.isNotEmpty
+                              ? maintenanceSpots
+                              : const [
+                                FlSpot(0, 8),
+                                FlSpot(1, 12),
+                                FlSpot(2, 6),
+                                FlSpot(3, 14),
+                                FlSpot(4, 10),
+                                FlSpot(5, 16),
+                                FlSpot(6, 10),
+                              ],
                       isCurved: true,
                       gradient: LinearGradient(
                         colors: [Colors.blue.withOpacity(0.8), Colors.blue],
@@ -1146,13 +1294,14 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                       isStrokeCapRound: true,
                       dotData: FlDotData(
                         show: true,
-                        getDotPainter: (spot, percent, barData, index) =>
-                            FlDotCirclePainter(
-                          radius: 4,
-                          color: Colors.blue,
-                          strokeWidth: 2,
-                          strokeColor: Colors.white,
-                        ),
+                        getDotPainter:
+                            (spot, percent, barData, index) =>
+                                FlDotCirclePainter(
+                                  radius: 4,
+                                  color: Colors.blue,
+                                  strokeWidth: 2,
+                                  strokeColor: Colors.white,
+                                ),
                       ),
                       belowBarData: BarAreaData(show: false),
                     ),
@@ -1173,10 +1322,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Repair Tasks',
-                  style: TextStyle(fontSize: 12),
-                ),
+                const Text('Repair Tasks', style: TextStyle(fontSize: 12)),
                 const SizedBox(width: 24),
                 Container(
                   width: 12,
@@ -1187,10 +1333,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  'Maintenance',
-                  style: TextStyle(fontSize: 12),
-                ),
+                const Text('Maintenance', style: TextStyle(fontSize: 12)),
               ],
             ),
           ],

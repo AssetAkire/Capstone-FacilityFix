@@ -4,10 +4,7 @@ import '../popupwidgets/assignstaff_popup.dart';
 class ConcernSlipDetailDialog extends StatelessWidget {
   final Map<String, dynamic> task;
 
-  const ConcernSlipDetailDialog({
-    super.key,
-    required this.task,
-  });
+  const ConcernSlipDetailDialog({super.key, required this.task});
 
   @override
   Widget build(BuildContext context) {
@@ -16,10 +13,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
       insetPadding: const EdgeInsets.all(20),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.6,
-        constraints: const BoxConstraints(
-          maxWidth: 800,
-          maxHeight: 700,
-        ),
+        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 700),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -59,12 +53,8 @@ class ConcernSlipDetailDialog extends StatelessWidget {
                     // Details Grid
                     _buildDetailsGrid(),
                     const SizedBox(height: 16),
-                    
-                    Divider(
-                      color: Colors.grey[300],
-                      thickness: 1,
-                      height: 1,
-                    ),
+
+                    Divider(color: Colors.grey[300], thickness: 1, height: 1),
                     const SizedBox(height: 16),
 
                     // Work Description Section
@@ -73,11 +63,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
                 ),
               ),
             ),
-            Divider(
-              color: Colors.grey[300],
-              thickness: 1,
-              height: 1,
-            ),
+            Divider(color: Colors.grey[300], thickness: 1, height: 1),
 
             // Footer with Next Button
             _buildFooter(context),
@@ -103,11 +89,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
           const Spacer(),
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(
-              Icons.close,
-              color: Colors.grey,
-              size: 24,
-            ),
+            icon: const Icon(Icons.close, color: Colors.grey, size: 24),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -124,10 +106,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: _buildDetailItem(
-                'REFERENCE NUMBER',
-                task['id'] ?? 'N/A',
-              ),
+              child: _buildDetailItem('REFERENCE NUMBER', task['id'] ?? 'N/A'),
             ),
             const SizedBox(width: 48),
             Expanded(
@@ -139,11 +118,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        Divider(
-              color: Colors.grey[300],
-              thickness: 1,
-              height: 1,
-            ),
+        Divider(color: Colors.grey[300], thickness: 1, height: 1),
         const SizedBox(height: 16),
 
         // Priority and Status Row
@@ -196,10 +171,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: _buildDetailItem(
-                'REQUESTED BY',
-                'Erika De Guzman', 
-              ),
+              child: _buildDetailItem('REQUESTED BY', 'Erika De Guzman'),
             ),
             const SizedBox(width: 48),
             Expanded(
@@ -226,7 +198,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
             Expanded(
               child: _buildDetailItem(
                 'SCHEDULE AVAILABILITY',
-                task['dateRequested'] ?? 'N/A', 
+                task['dateRequested'] ?? 'N/A',
               ),
             ),
           ],
@@ -275,13 +247,9 @@ class ConcernSlipDetailDialog extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          task['description'] ?? 
-          'The kitchen faucet has been continuously leaking since last night. Water is dripping even when the handle is fully closed, which may lead to water waste and higher utility bills. Please inspect and repair as soon as possible.',
-          style: TextStyle(
-            fontSize: 15,
-            height: 1.6,
-            color: Colors.grey[700],
-          ),
+          task['description'] ??
+              'The kitchen faucet has been continuously leaking since last night. Water is dripping even when the handle is fully closed, which may lead to water waste and higher utility bills. Please inspect and repair as soon as possible.',
+          style: TextStyle(fontSize: 15, height: 1.6, color: Colors.grey[700]),
         ),
       ],
     );
@@ -297,15 +265,15 @@ class ConcernSlipDetailDialog extends StatelessWidget {
             onPressed: () {
               // Handle next action
               Navigator.of(context).pop();
-              AssignScheduleWorkDialog.show(context, task); // Open assign dialog
+              AssignScheduleWorkDialog.show(
+                context,
+                task,
+              ); // Open assign dialog
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1976D2),
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 32,
-                vertical: 16,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -313,10 +281,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
             ),
             child: const Text(
               'Next',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -408,7 +373,7 @@ class ConcernSlipDetailDialog extends StatelessWidget {
       final parts = buildingUnit.split(' - Unit ');
       if (parts.length == 2) {
         final building = parts[0].replaceAll('Bldg ', '');
-        return '$building - 1010'; 
+        return '$building - 1010';
       }
     }
     return buildingUnit;

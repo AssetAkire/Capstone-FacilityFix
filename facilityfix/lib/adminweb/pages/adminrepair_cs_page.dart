@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
 import '../popupwidgets/cs_viewdetails_popup.dart';
+import '../popupwidgets/assignstaff_popup.dart';
+import '../services/api_service.dart';
 
 class AdminRepairPage extends StatefulWidget {
   const AdminRepairPage({super.key});
@@ -11,6 +13,180 @@ class AdminRepairPage extends StatefulWidget {
 }
 
 class _AdminRepairPageState extends State<AdminRepairPage> {
+  final ApiService _apiService = ApiService();
+  List<Map<String, dynamic>> _repairTasks = [];
+  List<Map<String, dynamic>> _filteredTasks = [];
+  bool _isLoading = true;
+  String _errorMessage = '';
+
+  // Dropdown values for filtering
+  String _selectedRole = 'All Roles';
+  String _selectedStatus = 'All Status';
+  String _selectedConcernType = 'Concern Slip';
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadConcernSlips();
+  }
+
+  Future<void> _loadConcernSlips() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final concernSlips = await _apiService.getAllConcernSlips();
+
+      setState(() {
+        _repairTasks =
+            concernSlips.map((slip) {
+              return {
+                'id': slip['formatted_id'] ?? slip['_doc_id'] ?? 'N/A',
+                'title': slip['title'] ?? 'No Title',
+                'dateRequested': _formatDate(slip['created_at']),
+                'buildingUnit': _getBuildingUnit(slip),
+                'priority': _capitalizePriority(slip['priority'] ?? 'medium'),
+                'department': _getDepartment(slip['category']),
+                'status': _capitalizeStatus(slip['status'] ?? 'pending'),
+                'location': slip['location'] ?? 'N/A',
+                'description': slip['description'] ?? 'No Description',
+                'category': slip['category'] ?? 'general',
+                'reportedBy': slip['reported_by'] ?? 'Unknown',
+                'rawData': slip, // Store raw data for detailed view
+              };
+            }).toList();
+        _filteredTasks = List.from(_repairTasks);
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load concern slips: $e';
+        _isLoading = false;
+      });
+      print('[AdminRepairPage] Error loading concern slips: $e');
+    }
+  }
+
+  String _formatDate(dynamic dateValue) {
+    if (dateValue == null) return 'N/A';
+
+    try {
+      DateTime date;
+      if (dateValue is String) {
+        date = DateTime.parse(dateValue);
+      } else if (dateValue is DateTime) {
+        date = dateValue;
+      } else {
+        return 'N/A';
+      }
+
+      return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
+  String _getBuildingUnit(Map<String, dynamic> slip) {
+    // Try to get building and unit info
+    final unitId = slip['unit_id'];
+    if (unitId != null && unitId.toString().isNotEmpty) {
+      return 'Unit $unitId';
+    }
+    return 'N/A';
+  }
+
+  String _capitalizePriority(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'low':
+        return 'Low';
+      case 'medium':
+        return 'Medium';
+      case 'high':
+        return 'High';
+      case 'critical':
+        return 'Critical';
+      default:
+        return 'Medium';
+    }
+  }
+
+  String _capitalizeStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'pending':
+        return 'Pending';
+      case 'assigned':
+        return 'Assigned';
+      case 'in_progress':
+        return 'In Progress';
+      case 'assessed':
+        return 'Assessed';
+      case 'approved':
+        return 'Approved';
+      case 'rejected':
+        return 'Rejected';
+      case 'completed':
+        return 'Completed';
+      case 'returned_to_tenant':
+        return 'Returned to Tenant';
+      default:
+        return 'Pending';
+    }
+  }
+
+  String _getDepartment(String? category) {
+    switch (category?.toLowerCase()) {
+      case 'electrical':
+        return 'Electrical';
+      case 'plumbing':
+        return 'Plumbing';
+      case 'hvac':
+        return 'HVAC';
+      case 'carpentry':
+        return 'Carpentry';
+      case 'maintenance':
+        return 'Maintenance';
+      case 'security':
+        return 'Security';
+      case 'fire_safety':
+        return 'Fire Safety';
+      default:
+        return 'General';
+    }
+  }
+
+  void _applyFilters() {
+    setState(() {
+      _filteredTasks =
+          _repairTasks.where((task) {
+            // Search filter
+            bool matchesSearch =
+                _searchQuery.isEmpty ||
+                task['title'].toLowerCase().contains(
+                  _searchQuery.toLowerCase(),
+                ) ||
+                task['id'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
+                task['location'].toLowerCase().contains(
+                  _searchQuery.toLowerCase(),
+                );
+
+            // Status filter
+            bool matchesStatus =
+                _selectedStatus == 'All Status' ||
+                task['status'] == _selectedStatus;
+
+            return matchesSearch && matchesStatus;
+          }).toList();
+    });
+  }
+
+  void _onSearchChanged(String query) {
+    _searchQuery = query;
+    _applyFilters();
+  }
+
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -55,29 +231,30 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     );
   }
 
-  // Sample data for repair tasks (concern slips)
-  final List<Map<String, dynamic>> _repairTasks = [
-    {
-      'id': 'CS-2025-00321',
-      'title': 'Leaking Faucet In Kitchen',
-      'dateRequested': '2025-07-19',
-      'buildingUnit': 'Bldg A - Unit 302',
-      'priority': 'Medium',
-      'department': 'Plumbing',
-      'status': 'Pending',
-    },
-    // You can add more sample data here
-  ];
+  // Check if task can be assigned to staff
+  bool _canAssignStaff(Map<String, dynamic> task) {
+    final status = task['status']?.toString().toLowerCase();
+    return status == 'pending' || status == 'evaluated';
+  }
 
-  // Dropdown values for filtering
-  String _selectedRole = 'All Roles';
-  String _selectedStatus = 'All Status';
-  String _selectedConcernType = 'Concern Slip';
+  // Check if action buttons should be disabled
+  bool _areActionButtonsDisabled(Map<String, dynamic> task) {
+    final status = task['status']?.toString().toLowerCase();
+    return status == 'assigned' && task['rawData']?['assessed_by'] == null;
+  }
 
   // Action dropdown menu methods
-  void _showActionMenu(BuildContext context, Map<String, dynamic> task, Offset position) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    
+  void _showActionMenu(
+    BuildContext context,
+    Map<String, dynamic> task,
+    Offset position,
+  ) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+
+    final canAssign = _canAssignStaff(task);
+    final actionsDisabled = _areActionButtonsDisabled(task);
+
     showMenu(
       context: context,
       position: RelativeRect.fromRect(
@@ -97,28 +274,44 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               const SizedBox(width: 12),
               Text(
                 'View',
-                style: TextStyle(
-                  color: Colors.green[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.green[600], fontSize: 14),
               ),
             ],
           ),
         ),
+        if (canAssign)
+          PopupMenuItem(
+            value: 'assign',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.person_add_outlined,
+                  color: Colors.blue[600],
+                  size: 18,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Assign Staff',
+                  style: TextStyle(color: Colors.blue[600], fontSize: 14),
+                ),
+              ],
+            ),
+          ),
         PopupMenuItem(
           value: 'edit',
+          enabled: !actionsDisabled,
           child: Row(
             children: [
               Icon(
                 Icons.edit_outlined,
-                color: Colors.blue[600],
+                color: actionsDisabled ? Colors.grey[400] : Colors.blue[600],
                 size: 18,
               ),
               const SizedBox(width: 12),
               Text(
                 'Edit',
                 style: TextStyle(
-                  color: Colors.blue[600],
+                  color: actionsDisabled ? Colors.grey[400] : Colors.blue[600],
                   fontSize: 14,
                 ),
               ),
@@ -127,18 +320,19 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
         ),
         PopupMenuItem(
           value: 'delete',
+          enabled: !actionsDisabled,
           child: Row(
             children: [
               Icon(
                 Icons.delete_outline,
-                color: Colors.red[600],
+                color: actionsDisabled ? Colors.grey[400] : Colors.red[600],
                 size: 18,
               ),
               const SizedBox(width: 12),
               Text(
                 'Delete',
                 style: TextStyle(
-                  color: Colors.red[600],
+                  color: actionsDisabled ? Colors.grey[400] : Colors.red[600],
                   fontSize: 14,
                 ),
               ),
@@ -146,9 +340,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
           ),
         ),
       ],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       elevation: 8,
     ).then((value) {
       if (value != null) {
@@ -163,6 +355,9 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       case 'view':
         _viewTask(task);
         break;
+      case 'assign':
+        _assignStaff(task);
+        break;
       case 'edit':
         _editTask(task);
         break;
@@ -175,6 +370,18 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   // View task method
   void _viewTask(Map<String, dynamic> task) {
     ConcernSlipDetailDialog.show(context, task);
+  }
+
+  // Assign staff method
+  void _assignStaff(Map<String, dynamic> task) {
+    AssignScheduleWorkDialog.show(
+      context,
+      task,
+      onAssignmentComplete: () {
+        // Refresh the concern slips list after assignment
+        _loadConcernSlips();
+      },
+    );
   }
 
   // Edit task method
@@ -207,6 +414,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                 // Remove task from list
                 setState(() {
                   _repairTasks.removeWhere((t) => t['id'] == task['id']);
+                  _applyFilters();
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -215,9 +423,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                   ),
                 );
               },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Delete'),
             ),
           ],
@@ -237,13 +443,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     38, // ACTION
   ];
 
-  Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
+  Widget _fixedCell(
+    int i,
+    Widget child, {
+    Alignment align = Alignment.centerLeft,
+  }) {
     return SizedBox(
       width: _colW[i],
-      child: Align(
-        alignment: align,
-        child: child,
-      ),
+      child: Align(alignment: align, child: child),
     );
   }
 
@@ -254,7 +461,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
     softWrap: false,
     style: style,
   );
-
 
   @override
   Widget build(BuildContext context) {
@@ -342,7 +548,6 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               ),
               child: const Text('Concern Slips'),
             ),
-            
           ],
         ),
       ],
@@ -352,9 +557,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   // Filter Section Widget
   Widget _buildFilterSection() {
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
           // Search Field
@@ -363,11 +566,11 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
             child: Container(
               height: 40,
               decoration: BoxDecoration(
-                
                 border: Border.all(color: Colors.grey[300]!),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: TextField(
+                onChanged: _onSearchChanged,
                 decoration: InputDecoration(
                   prefixIcon: Icon(
                     Icons.search,
@@ -375,10 +578,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                     size: 20,
                   ),
                   hintText: "Search",
-                  hintStyle: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 14,
-                  ),
+                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -389,7 +589,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Role Dropdown
           Expanded(
             child: Container(
@@ -408,22 +608,27 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                       _selectedRole = newValue!;
                     });
                   },
-                  items: <String>['All Roles', 'Admin', 'Technician', 'Manager']
-                      .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        'Role: $value',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    );
-                  }).toList(),
+                  items:
+                      <String>[
+                        'All Roles',
+                        'Admin',
+                        'Technician',
+                        'Manager',
+                      ].map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            'Role: $value',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Status Dropdown
           Expanded(
             child: Container(
@@ -440,25 +645,34 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                   onChanged: (String? newValue) {
                     setState(() {
                       _selectedStatus = newValue!;
+                      _applyFilters();
                     });
                   },
-                  items: <String>['All Status', 'Pending', 'In Progress', 'Completed', 'Cancelled']
-                      .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        'Status: $value',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    );
-                  }).toList(),
+                  items:
+                      <String>[
+                        'All Status',
+                        'Pending',
+                        'Assigned',
+                        'In Progress',
+                        'Assessed',
+                        'Completed',
+                        'Cancelled',
+                      ].map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            'Status: $value',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 300),
-          
-          // Filter Button
+
+          // Refresh Button
           Container(
             height: 40,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -467,24 +681,23 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               border: Border.all(color: Colors.grey[300]!),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.tune,
-                  color: Colors.grey[600],
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  "Filter",
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+            child: InkWell(
+              onTap: _loadConcernSlips,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh, color: Colors.grey[600], size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    "Refresh",
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -495,7 +708,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
   // Table Section Widget
   Widget _buildTableSection() {
     return Container(
-      height: 400, // Fixed height to avoid unbounded constraints
+      height: 650, // Fixed height to avoid unbounded constraints
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -540,107 +753,216 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
 
                         // Navigate based on selection
                         if (newValue == 'Concern Slip') {
-                          context.go('/work/repair'); 
+                          context.go('/work/repair');
                         } else if (newValue == 'Job Service') {
                           context.go('/adminweb/pages/adminrepair_js_page');
                         } else if (newValue == 'Work Order Permit') {
                           context.go('/adminweb/pages/adminrepair_wop_page');
                         }
                       },
-                      items: <String>[
-                        'Concern Slip',
-                        'Job Service',
-                        'Work Order Permit'
-                      ].map<DropdownMenuItem<String>>((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(
-                            value,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        );
-                      }).toList(),
+                      items:
+                          <String>[
+                            'Concern Slip',
+                            'Job Service',
+                            'Work Order Permit',
+                          ].map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(
+                                value,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            );
+                          }).toList(),
                     ),
                   ),
-                )
+                ),
               ],
             ),
           ),
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: Colors.grey[400],
-          ),
+          Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
           // Data Table
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SingleChildScrollView(
-                child: DataTable(
-                  columnSpacing: 50,
-                  headingRowHeight: 56,
-                  dataRowHeight: 64,
-                  headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
-                  headingTextStyle: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[600],
-                    letterSpacing: 0.5,
-                  ),
-                  dataTextStyle: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black87,
-                  ),
-                  columns: [
-                    DataColumn(label: _fixedCell(0, const Text("CONCERN ID"))),
-                    DataColumn(label: _fixedCell(1, const Text("CONCERN TITLE"))),
-                    DataColumn(label: _fixedCell(2, const Text("DATE REQUESTED"))),
-                    DataColumn(label: _fixedCell(3, const Text("BUILDING & UNIT"))),
-                    DataColumn(label: _fixedCell(4, const Text("PRIORITY"))),
-                    DataColumn(label: _fixedCell(5, const Text("DEPARTMENT"))),
-                    DataColumn(label: _fixedCell(6, const Text("STATUS"))),
-                    DataColumn(label: _fixedCell(7, const Text(""))),
-                  ],
-                  rows: _repairTasks.map((task) {
-                    return DataRow(
-                      cells: [
-                        DataCell(_fixedCell(0, _ellipsis(task['id'],        style: TextStyle(color: Colors.grey[700], fontSize: 13)))),
-                        DataCell(_fixedCell(1, _ellipsis(task['title']))),
-                        DataCell(_fixedCell(2, _ellipsis(task['dateRequested']))),
-                        DataCell(_fixedCell(3, _ellipsis(task['buildingUnit']))),
-                        
-                        // Chips get a fixed box too (and aligned left)
-                        DataCell(_fixedCell(4, _buildPriorityChip(task['priority']))),
-                        DataCell(_fixedCell(5, _buildDepartmentChip(task['department']))),
-                        DataCell(_fixedCell(6, _buildStatusChip(task['status']))),
+            child:
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _errorMessage.isNotEmpty
+                    ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.red[300],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _errorMessage,
+                            style: TextStyle(
+                              color: Colors.red[600],
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: _loadConcernSlips,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                    : _filteredTasks.isEmpty
+                    ? const Center(
+                      child: Text(
+                        'No concern slips found',
+                        style: TextStyle(fontSize: 16, color: Colors.grey),
+                      ),
+                    )
+                    : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SingleChildScrollView(
+                        child: DataTable(
+                          columnSpacing: 50,
+                          headingRowHeight: 56,
+                          dataRowHeight: 64,
+                          headingRowColor: WidgetStateProperty.all(
+                            Colors.grey[50],
+                          ),
+                          headingTextStyle: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[600],
+                            letterSpacing: 0.5,
+                          ),
+                          dataTextStyle: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                          columns: [
+                            DataColumn(
+                              label: _fixedCell(0, const Text("CONCERN ID")),
+                            ),
+                            DataColumn(
+                              label: _fixedCell(1, const Text("CONCERN TITLE")),
+                            ),
+                            DataColumn(
+                              label: _fixedCell(
+                                2,
+                                const Text("DATE REQUESTED"),
+                              ),
+                            ),
+                            DataColumn(
+                              label: _fixedCell(
+                                3,
+                                const Text("BUILDING & UNIT"),
+                              ),
+                            ),
+                            DataColumn(
+                              label: _fixedCell(4, const Text("PRIORITY")),
+                            ),
+                            DataColumn(
+                              label: _fixedCell(5, const Text("DEPARTMENT")),
+                            ),
+                            DataColumn(
+                              label: _fixedCell(6, const Text("STATUS")),
+                            ),
+                            DataColumn(label: _fixedCell(7, const Text(""))),
+                          ],
+                          rows:
+                              _filteredTasks.map((task) {
+                                return DataRow(
+                                  cells: [
+                                    DataCell(
+                                      _fixedCell(
+                                        0,
+                                        _ellipsis(
+                                          task['id'],
+                                          style: TextStyle(
+                                            color: Colors.grey[700],
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      _fixedCell(1, _ellipsis(task['title'])),
+                                    ),
+                                    DataCell(
+                                      _fixedCell(
+                                        2,
+                                        _ellipsis(task['dateRequested']),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      _fixedCell(
+                                        3,
+                                        _ellipsis(task['buildingUnit']),
+                                      ),
+                                    ),
 
-                        // Action menu cell (narrow, centered)
-                        DataCell(_fixedCell(7,
-                          Builder(builder: (context) {
-                            return IconButton(
-                              onPressed: () {
-                                final rbx = context.findRenderObject() as RenderBox;
-                                final position = rbx.localToGlobal(Offset.zero);
-                                _showActionMenu(context, task, position);
-                              },
-                              icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
-                            );
-                          }),
-                          align: Alignment.center,
-                        )),
-                      ],
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
+                                    // Chips get a fixed box too (and aligned left)
+                                    DataCell(
+                                      _fixedCell(
+                                        4,
+                                        _buildPriorityChip(task['priority']),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      _fixedCell(
+                                        5,
+                                        _buildDepartmentChip(
+                                          task['department'],
+                                        ),
+                                      ),
+                                    ),
+                                    DataCell(
+                                      _fixedCell(
+                                        6,
+                                        _buildStatusChip(task['status']),
+                                      ),
+                                    ),
+
+                                    // Action menu cell (narrow, centered)
+                                    DataCell(
+                                      _fixedCell(
+                                        7,
+                                        Builder(
+                                          builder: (context) {
+                                            return IconButton(
+                                              onPressed: () {
+                                                final rbx =
+                                                    context.findRenderObject()
+                                                        as RenderBox;
+                                                final position = rbx
+                                                    .localToGlobal(Offset.zero);
+                                                _showActionMenu(
+                                                  context,
+                                                  task,
+                                                  position,
+                                                );
+                                              },
+                                              icon: Icon(
+                                                Icons.more_vert,
+                                                color: Colors.grey[400],
+                                                size: 20,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        align: Alignment.center,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }).toList(),
+                        ),
+                      ),
+                    ),
           ),
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: Colors.grey[400],
-          ),
+          Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
           // Pagination Section
           Padding(
@@ -649,20 +971,14 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Showing 1 to 1 of 1 entry",
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
+                  "Showing ${_filteredTasks.length} of ${_repairTasks.length} entries",
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
                 Row(
                   children: [
                     IconButton(
                       onPressed: null,
-                      icon: Icon(
-                        Icons.chevron_left,
-                        color: Colors.grey[400],
-                      ),
+                      icon: Icon(Icons.chevron_left, color: Colors.grey[400]),
                     ),
                     Container(
                       width: 32,
@@ -703,10 +1019,7 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
                     ),
                     IconButton(
                       onPressed: () {},
-                      icon: Icon(
-                        Icons.chevron_right,
-                        color: Colors.grey[600],
-                      ),
+                      icon: Icon(Icons.chevron_right, color: Colors.grey[600]),
                     ),
                   ],
                 ),
@@ -734,6 +1047,10 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       case 'Low':
         bgColor = const Color(0xFFE8F5E8);
         textColor = const Color(0xFF2E7D32);
+        break;
+      case 'Critical':
+        bgColor = const Color(0xFFFFEBEE);
+        textColor = const Color(0xFFD32F2F);
         break;
       default:
         bgColor = Colors.grey[100]!;
@@ -795,6 +1112,26 @@ class _AdminRepairPageState extends State<AdminRepairPage> {
       case 'Cancelled':
         bgColor = Colors.grey[100]!;
         textColor = Colors.grey[700]!;
+        break;
+      case 'Assigned':
+        bgColor = const Color(0xFFE3F2FD);
+        textColor = const Color(0xFF1976D2);
+        break;
+      case 'Assessed':
+        bgColor = const Color(0xFFF3E5F5);
+        textColor = const Color(0xFF7B1FA2);
+        break;
+      case 'Approved':
+        bgColor = const Color(0xFFE8F5E8);
+        textColor = const Color(0xFF2E7D32);
+        break;
+      case 'Rejected':
+        bgColor = const Color(0xFFFFEBEE);
+        textColor = const Color(0xFFD32F2F);
+        break;
+      case 'Returned to Tenant':
+        bgColor = const Color(0xFFFFF8E1);
+        textColor = const Color(0xFFFF8F00);
         break;
       default:
         bgColor = Colors.grey[100]!;

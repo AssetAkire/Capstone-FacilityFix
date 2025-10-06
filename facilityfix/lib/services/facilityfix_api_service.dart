@@ -20,7 +20,7 @@ class FacilityFixAPIService {
       // - real device on Wi-Fi: pass your PC's LAN IP (could be change based sa mag oopen ng backend nad front at the same time)
       baseUrl =
           (lanIp != null && lanIp.isNotEmpty)
-              ? 'http://192.168.1.12:8000' // provided LAN IP
+              ? 'http://192.168.18.10:8000' // provided LAN IP
               : 'http://10.0.2.2:8000'; // emulator default
     } else if (defaultTargetPlatform == TargetPlatform.iOS) {
       // iOS simulator shares host network
@@ -507,10 +507,7 @@ class FacilityFixAPIService {
     try {
       final response = await _client.post(
         Uri.parse('$baseUrl/announcements/'),
-        headers: {
-          ..._headers,
-          'Authorization': 'Bearer $idToken',
-        },
+        headers: {..._headers, 'Authorization': 'Bearer $idToken'},
         body: jsonEncode(request.toJson()),
       );
       // 200 or 201 are both fine depending on backend return
@@ -545,10 +542,7 @@ class FacilityFixAPIService {
       );
       final response = await _client.get(
         uri,
-        headers: {
-          ..._headers,
-          'Authorization': 'Bearer $idToken',
-        },
+        headers: {..._headers, 'Authorization': 'Bearer $idToken'},
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -569,10 +563,7 @@ class FacilityFixAPIService {
     try {
       final response = await _client.get(
         Uri.parse('$baseUrl/announcements/$announcementId'),
-        headers: {
-          ..._headers,
-          'Authorization': 'Bearer $idToken',
-        },
+        headers: {..._headers, 'Authorization': 'Bearer $idToken'},
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -594,10 +585,7 @@ class FacilityFixAPIService {
     try {
       final response = await _client.put(
         Uri.parse('$baseUrl/announcements/$announcementId'),
-        headers: {
-          ..._headers,
-          'Authorization': 'Bearer $idToken',
-        },
+        headers: {..._headers, 'Authorization': 'Bearer $idToken'},
         body: jsonEncode(updates.toJson()),
       );
       if (response.statusCode == 200) {
@@ -618,16 +606,11 @@ class FacilityFixAPIService {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl/announcements/$announcementId').replace(
-        queryParameters: {
-          'notify_deactivation': notifyDeactivation.toString(),
-        },
+        queryParameters: {'notify_deactivation': notifyDeactivation.toString()},
       );
       final response = await _client.delete(
         uri,
-        headers: {
-          ..._headers,
-          'Authorization': 'Bearer $idToken',
-        },
+        headers: {..._headers, 'Authorization': 'Bearer $idToken'},
       );
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -647,10 +630,7 @@ class FacilityFixAPIService {
     try {
       final response = await _client.post(
         Uri.parse('$baseUrl/announcements/$announcementId/rebroadcast'),
-        headers: {
-          ..._headers,
-          'Authorization': 'Bearer $idToken',
-        },
+        headers: {..._headers, 'Authorization': 'Bearer $idToken'},
       );
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -670,10 +650,7 @@ class FacilityFixAPIService {
     try {
       final response = await _client.post(
         Uri.parse('$baseUrl/announcements/$announcementId/dismiss'),
-        headers: {
-          ..._headers,
-          'Authorization': 'Bearer $idToken',
-        },
+        headers: {..._headers, 'Authorization': 'Bearer $idToken'},
       );
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -692,10 +669,7 @@ class FacilityFixAPIService {
     try {
       final response = await _client.get(
         Uri.parse('$baseUrl/announcements/types/available'),
-        headers: {
-          ..._headers,
-          'Authorization': 'Bearer $idToken',
-        },
+        headers: {..._headers, 'Authorization': 'Bearer $idToken'},
       );
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
@@ -708,4 +682,3 @@ class FacilityFixAPIService {
     }
   }
 }
-

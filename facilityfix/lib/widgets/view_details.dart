@@ -10,20 +10,24 @@ class RepairDetailsScreen extends StatelessWidget {
   final String? title;
   final String requestId;
   final String reqDate; // will display as: Aug 12, 2025
-  final String requestType; // Concern Slip | Job Service | Work Order / Work Order Permit
-  final String statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String
+  requestType; // Concern Slip | Job Service | Work Order / Work Order Permit
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
   final String? priority; // High | Medium | Low
 
   //  Tenant / Requester
   final String requestedBy;
   final String unit;
-  final String? scheduleAvailability; // will display as: Aug 12, 1:30 PM (if time exists)
+  final String?
+  scheduleAvailability; // will display as: Aug 12, 1:30 PM (if time exists)
 
   //  Request Details
   final String? description;
   final List<String>? attachments;
 
-  final String? jobServiceNotes; // For Job Service; falls back to description if null/empty
+  final String?
+  jobServiceNotes; // For Job Service; falls back to description if null/empty
 
   // Initial Assessment
   final String? initialAssigneeName;
@@ -132,7 +136,8 @@ class RepairDetailsScreen extends StatelessWidget {
       .replaceAll(RegExp(r'[_\-]+'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ');
 
-  bool get _isJobService => _n(requestType).startsWith('job service'); // tolerant
+  bool get _isJobService =>
+      _n(requestType).startsWith('job service'); // tolerant
   bool get _isPermit =>
       _n(requestType) == 'work order permit' || _n(requestType) == 'work order';
 
@@ -172,7 +177,8 @@ class RepairDetailsScreen extends StatelessWidget {
         (completionRecommendation?.trim().isNotEmpty ?? false) ||
         ((completionAssessedAttachments ?? const []).isNotEmpty);
 
-    final bool hasAssessmentBits = hasInitialAssessment || hasCompletionAssessment;
+    final bool hasAssessmentBits =
+        hasInitialAssessment || hasCompletionAssessment;
 
     final String headerTitle =
         (title?.trim().isNotEmpty ?? false) ? title!.trim() : requestType;
@@ -282,7 +288,10 @@ class RepairDetailsScreen extends StatelessWidget {
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: attachments!.map((u) => _thumb(u, h: 80, w: 140)).toList(),
+                    children:
+                        attachments!
+                            .map((u) => _thumb(u, h: 80, w: 140))
+                            .toList(),
                   ),
                 ],
               ],
@@ -339,7 +348,9 @@ class RepairDetailsScreen extends StatelessWidget {
                     if ((initialDateAssessed?.trim().isNotEmpty ?? false)) ...[
                       KeyValueRow.text(
                         label: 'Date Assessed',
-                        valueText: formatDateRequested(initialDateAssessed!.trim()),
+                        valueText: formatDateRequested(
+                          initialDateAssessed!.trim(),
+                        ),
                       ),
                       const SizedBox(height: 8),
                     ],
@@ -352,7 +363,8 @@ class RepairDetailsScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                     ],
 
-                    if ((initialRecommendation?.trim().isNotEmpty ?? false)) ...[
+                    if ((initialRecommendation?.trim().isNotEmpty ??
+                        false)) ...[
                       _SectionCard(
                         title: "Recommendation",
                         content: initialRecommendation!.trim(),
@@ -366,16 +378,18 @@ class RepairDetailsScreen extends StatelessWidget {
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: initialAssessedAttachments!
-                            .map((u) => _thumb(u, h: 80, w: 140))
-                            .toList(),
+                        children:
+                            initialAssessedAttachments!
+                                .map((u) => _thumb(u, h: 80, w: 140))
+                                .toList(),
                       ),
                     ],
                   ],
 
                   // ---------------- Completion Assessment ----------------
                   if (hasCompletionAssessment) ...[
-                    if ((completionAssigneeName?.trim().isNotEmpty ?? false)) ...[
+                    if ((completionAssigneeName?.trim().isNotEmpty ??
+                        false)) ...[
                       _AvatarNameBlock(
                         name: completionAssigneeName!.trim(),
                         department: completionAssigneeDepartment?.trim(),
@@ -383,10 +397,13 @@ class RepairDetailsScreen extends StatelessWidget {
                       const SizedBox(height: 10),
                     ],
 
-                    if ((completionDateAssessed?.trim().isNotEmpty ?? false)) ...[
+                    if ((completionDateAssessed?.trim().isNotEmpty ??
+                        false)) ...[
                       KeyValueRow.text(
                         label: 'Date Assessed',
-                        valueText: formatDateRequested(completionDateAssessed!.trim()),
+                        valueText: formatDateRequested(
+                          completionDateAssessed!.trim(),
+                        ),
                       ),
                       const SizedBox(height: 8),
                     ],
@@ -399,7 +416,8 @@ class RepairDetailsScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                     ],
 
-                    if ((completionRecommendation?.trim().isNotEmpty ?? false)) ...[
+                    if ((completionRecommendation?.trim().isNotEmpty ??
+                        false)) ...[
                       _SectionCard(
                         title: "Recommendation",
                         content: completionRecommendation!.trim(),
@@ -407,15 +425,17 @@ class RepairDetailsScreen extends StatelessWidget {
                       const SizedBox(height: 8),
                     ],
 
-                    if ((completionAssessedAttachments?.isNotEmpty ?? false)) ...[
+                    if ((completionAssessedAttachments?.isNotEmpty ??
+                        false)) ...[
                       const _SectionTitle('Attachments'),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: completionAssessedAttachments!
-                            .map((u) => _thumb(u, h: 80, w: 140))
-                            .toList(),
+                        children:
+                            completionAssessedAttachments!
+                                .map((u) => _thumb(u, h: 80, w: 140))
+                                .toList(),
                       ),
                     ],
                   ],
@@ -435,7 +455,10 @@ class RepairDetailsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if ((reqType ?? '').isNotEmpty)
-                    KeyValueRow.text(label: 'Request Type', valueText: reqType!),
+                    KeyValueRow.text(
+                      label: 'Request Type',
+                      valueText: reqType!,
+                    ),
                   if ((permitId ?? '').isNotEmpty) ...[
                     const SizedBox(height: 8),
                     KeyValueRow.text(label: 'Permit ID', valueText: permitId!),
@@ -486,11 +509,17 @@ class RepairDetailsScreen extends StatelessWidget {
                     KeyValueRow.text(label: 'Name', valueText: contractorName!),
                   if ((contractorCompany ?? '').isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    KeyValueRow.text(label: 'Company', valueText: contractorCompany!),
+                    KeyValueRow.text(
+                      label: 'Company',
+                      valueText: contractorCompany!,
+                    ),
                   ],
                   if ((contractorNumber ?? '').isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    KeyValueRow.text(label: 'Phone', valueText: contractorNumber!),
+                    KeyValueRow.text(
+                      label: 'Phone',
+                      valueText: contractorNumber!,
+                    ),
                   ],
                 ],
               ),
@@ -581,10 +610,15 @@ class _AvatarNameBlock extends StatelessWidget {
 
   static String _initials(String fullName) {
     final parts =
-        fullName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+        fullName
+            .trim()
+            .split(RegExp(r'\s+'))
+            .where((p) => p.isNotEmpty)
+            .toList();
     if (parts.isEmpty) return '';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 }
 
@@ -594,8 +628,10 @@ class MaintenanceDetailsScreen extends StatefulWidget {
   final String? title;
   final String requestId;
   final String reqDate; // Displays as: Aug 12, 2025
-  final String requestType; // Concern Slip | Job Service | Work Order / Work Order Permit
-  final String statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
+  final String
+  requestType; // Concern Slip | Job Service | Work Order / Work Order Permit
+  final String
+  statusTag; // Pending | Scheduled | Assigned | In Progress | On Hold | Done
 
   // ── Assigned To ────────────────────────────────────────────────────────────
   final String? assignedTo;
@@ -648,7 +684,8 @@ class MaintenanceDetailsScreen extends StatefulWidget {
   });
 
   @override
-  State<MaintenanceDetailsScreen> createState() => _MaintenanceDetailsScreenState();
+  State<MaintenanceDetailsScreen> createState() =>
+      _MaintenanceDetailsScreenState();
 }
 
 class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
@@ -657,9 +694,10 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _checklistState = (widget.checklist ?? const <String>[])
-        .map((item) => {"text": item, "checked": false})
-        .toList();
+    _checklistState =
+        (widget.checklist ?? const <String>[])
+            .map((item) => {"text": item, "checked": false})
+            .toList();
   }
 
   @override
@@ -675,8 +713,10 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
     final assessedDate = (widget.completionDateAssessed ?? '').trim();
     final assessedText = (widget.completionAssessment ?? '').trim();
     final recommendationText = (widget.completionRecommendation ?? '').trim();
-    final assessedAttachments = widget.completionAssessedAttachments ?? const <String>[];
-    final hasAssessmentBlock = assessedBy.isNotEmpty ||
+    final assessedAttachments =
+        widget.completionAssessedAttachments ?? const <String>[];
+    final hasAssessmentBlock =
+        assessedBy.isNotEmpty ||
         assessedDept.isNotEmpty ||
         assessedDate.isNotEmpty ||
         assessedText.isNotEmpty ||
@@ -693,7 +733,9 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
             children: [
               Expanded(
                 child: Text(
-                  (widget.title ?? '').trim().isEmpty ? 'Maintenance Task' : widget.title!,
+                  (widget.title ?? '').trim().isEmpty
+                      ? 'Maintenance Task'
+                      : widget.title!,
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
@@ -756,15 +798,25 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
               child: Column(
                 children: [
                   if ((widget.assignedTo ?? '').trim().isNotEmpty)
-                    KeyValueRow.text(label: 'Name', valueText: widget.assignedTo!.trim()),
-                  if ((widget.assignedDepartment ?? '').trim().isNotEmpty) const SizedBox(height: 8),
+                    KeyValueRow.text(
+                      label: 'Name',
+                      valueText: widget.assignedTo!.trim(),
+                    ),
                   if ((widget.assignedDepartment ?? '').trim().isNotEmpty)
-                    KeyValueRow.text(label: 'Department', valueText: widget.assignedDepartment!.trim()),
-                  if ((widget.assignedSchedule ?? '').trim().isNotEmpty) const SizedBox(height: 8),
+                    const SizedBox(height: 8),
+                  if ((widget.assignedDepartment ?? '').trim().isNotEmpty)
+                    KeyValueRow.text(
+                      label: 'Department',
+                      valueText: widget.assignedDepartment!.trim(),
+                    ),
+                  if ((widget.assignedSchedule ?? '').trim().isNotEmpty)
+                    const SizedBox(height: 8),
                   if ((widget.assignedSchedule ?? '').trim().isNotEmpty)
                     KeyValueRow.text(
                       label: 'Schedule',
-                      valueText: formatSchedule(widget.assignedSchedule!.trim()),
+                      valueText: formatSchedule(
+                        widget.assignedSchedule!.trim(),
+                      ),
                     ),
                 ],
               ),
@@ -775,35 +827,41 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
             _Section(
               title: "Checklist / Task Steps",
               child: Column(
-                children: _checklistState.map((step) {
-                  final checked = step["checked"] as bool;
-                  return InkWell(
-                    onTap: () => setState(() => step["checked"] = !checked),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
-                        children: [
-                          Icon(
-                            checked ? Icons.check_box : Icons.check_box_outline_blank,
-                            size: 20,
-                            color: const Color(0xFF111827),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              step["text"] as String,
-                              style: TextStyle(
-                                fontSize: 14,
-                                decoration: checked ? TextDecoration.lineThrough : TextDecoration.none,
+                children:
+                    _checklistState.map((step) {
+                      final checked = step["checked"] as bool;
+                      return InkWell(
+                        onTap: () => setState(() => step["checked"] = !checked),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            children: [
+                              Icon(
+                                checked
+                                    ? Icons.check_box
+                                    : Icons.check_box_outline_blank,
+                                size: 20,
+                                color: const Color(0xFF111827),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  step["text"] as String,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    decoration:
+                                        checked
+                                            ? TextDecoration.lineThrough
+                                            : TextDecoration.none,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
+                        ),
+                      );
+                    }).toList(),
               ),
             ),
 
@@ -815,7 +873,9 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Assessed By (only if any field is present)
-                  if (assessedBy.isNotEmpty || assessedDept.isNotEmpty || assessedDate.isNotEmpty)
+                  if (assessedBy.isNotEmpty ||
+                      assessedDept.isNotEmpty ||
+                      assessedDate.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Column(
@@ -834,15 +894,26 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
                           const SizedBox(height: 10),
 
                           if (assessedBy.isNotEmpty)
-                            KeyValueRow.text(label: 'Name', valueText: assessedBy),
+                            KeyValueRow.text(
+                              label: 'Name',
+                              valueText: assessedBy,
+                            ),
 
-                          if (assessedDept.isNotEmpty) const SizedBox(height: 8),
                           if (assessedDept.isNotEmpty)
-                            KeyValueRow.text(label: 'Department', valueText: assessedDept),
+                            const SizedBox(height: 8),
+                          if (assessedDept.isNotEmpty)
+                            KeyValueRow.text(
+                              label: 'Department',
+                              valueText: assessedDept,
+                            ),
 
-                          if (assessedDate.isNotEmpty) const SizedBox(height: 8),
                           if (assessedDate.isNotEmpty)
-                            KeyValueRow.text(label: 'Date', valueText: formatSchedule(assessedDate)),
+                            const SizedBox(height: 8),
+                          if (assessedDate.isNotEmpty)
+                            KeyValueRow.text(
+                              label: 'Date',
+                              valueText: formatSchedule(assessedDate),
+                            ),
                         ],
                       ),
                     ),
@@ -855,19 +926,24 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
                   // Recommendation card
                   if (recommendationText.isNotEmpty) const SizedBox(height: 12),
                   if (recommendationText.isNotEmpty)
-                    _SectionCard(title: "Recommendation", content: recommendationText),
+                    _SectionCard(
+                      title: "Recommendation",
+                      content: recommendationText,
+                    ),
 
                   // Attachments
-                  if (assessedAttachments.isNotEmpty) const SizedBox(height: 12),
+                  if (assessedAttachments.isNotEmpty)
+                    const SizedBox(height: 12),
                   if (assessedAttachments.isNotEmpty)
                     _Section(
                       title: "Assessed Attachments",
                       child: Wrap(
                         spacing: 8,
                         runSpacing: 8,
-                        children: assessedAttachments
-                            .map((u) => _thumb(u, h: 80, w: 140))
-                            .toList(),
+                        children:
+                            assessedAttachments
+                                .map((u) => _thumb(u, h: 80, w: 140))
+                                .toList(),
                       ),
                     ),
                 ],
@@ -881,9 +957,10 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: (widget.attachments ?? const <String>[])
-                    .map((u) => _thumb(u, h: 80, w: 140))
-                    .toList(),
+                children:
+                    (widget.attachments ?? const <String>[])
+                        .map((u) => _thumb(u, h: 80, w: 140))
+                        .toList(),
               ),
             ),
 
@@ -901,7 +978,11 @@ class _MaintenanceDetailsScreenState extends State<MaintenanceDetailsScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.warning, color: Color(0xFF005CE7), size: 22),
+                    const Icon(
+                      Icons.warning,
+                      color: Color(0xFF005CE7),
+                      size: 22,
+                    ),
                     const SizedBox(width: 10),
                     const SizedBox(width: 6),
                     Expanded(
@@ -1060,27 +1141,27 @@ class AnnouncementDetailScreen extends StatelessWidget {
 class InventoryDetailsScreen extends StatelessWidget {
   // ----- Item Details -----
   // Basic Information
-  final String itemName;            // Item name or Requested item name
-  final String itemId;              // Item ID (show in header if not empty)
-  final String? dateAdded;          // e.g., 'Automated'
-  final String? classification;     // reused by request item details if you like
-  final String? department;         // e.g., 'Civil/Carpentry' (for item details only)
-  final String? status;             // Inventory Request e.g., Pending or Approved
+  final String itemName; // Item name or Requested item name
+  final String itemId; // Item ID (show in header if not empty)
+  final String? dateAdded; // e.g., 'Automated'
+  final String? classification; // reused by request item details if you like
+  final String? department; // e.g., 'Civil/Carpentry' (for item details only)
+  final String? status; // Inventory Request e.g., Pending or Approved
 
   // divider
 
   // Stock and Supplier Details
   // Stock (Item)
-  final String? stockStatus;        // 'In Stock' | 'Out of Stock' | 'Critical'
-  final String? quantity;           // '150 pcs'
-  final String? reorderLevel;       // '50 pcs'
-  final String? unit;               // 'pcs'
+  final String? stockStatus; // 'In Stock' | 'Out of Stock' | 'Critical'
+  final String? quantity; // '150 pcs'
+  final String? reorderLevel; // '50 pcs'
+  final String? unit; // 'pcs'
 
   // divider
   // Supplier (Information) (optional)
   final String? supplierName;
   final String? supplierNumber;
-  final String? warrantyUntil;      // 'DD / MM / YY'
+  final String? warrantyUntil; // 'DD / MM / YY'
 
   // divider
   // Item details (Request)
@@ -1174,10 +1255,16 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Date Added', value: _kvText(dateAdded!)),
               if (_isNotEmpty(classification)) const SizedBox(height: 8),
               if (_isNotEmpty(classification))
-                KeyValueRow(label: 'Classification', value: _kvText(classification!)),
+                KeyValueRow(
+                  label: 'Classification',
+                  value: _kvText(classification!),
+                ),
               if (_isNotEmpty(department)) const SizedBox(height: 8),
               if (_isNotEmpty(department))
-                KeyValueRow(label: 'Department', value: DepartmentTag(department!)),
+                KeyValueRow(
+                  label: 'Department',
+                  value: DepartmentTag(department!),
+                ),
             ],
           ),
         ),
@@ -1203,7 +1290,10 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Quantity', value: _kvText(quantity!)),
               if (_isNotEmpty(reorderLevel)) const SizedBox(height: 8),
               if (_isNotEmpty(reorderLevel))
-                KeyValueRow(label: 'Reorder Level', value: _kvText(reorderLevel!)),
+                KeyValueRow(
+                  label: 'Reorder Level',
+                  value: _kvText(reorderLevel!),
+                ),
               if (_isNotEmpty(unit)) const SizedBox(height: 8),
               if (_isNotEmpty(unit))
                 KeyValueRow(label: 'Unit', value: _kvText(unit!)),
@@ -1214,7 +1304,11 @@ class InventoryDetailsScreen extends StatelessWidget {
     }
 
     // ===== Supplier =====
-    final bool showSupplier = _any([supplierName, supplierNumber, warrantyUntil]);
+    final bool showSupplier = _any([
+      supplierName,
+      supplierNumber,
+      warrantyUntil,
+    ]);
     if (showSupplier) {
       sections.add(
         _Section(
@@ -1222,13 +1316,22 @@ class InventoryDetailsScreen extends StatelessWidget {
           child: Column(
             children: [
               if (_isNotEmpty(supplierName))
-                KeyValueRow(label: 'Supplier Name', value: _kvText(supplierName!)),
+                KeyValueRow(
+                  label: 'Supplier Name',
+                  value: _kvText(supplierName!),
+                ),
               if (_isNotEmpty(supplierNumber)) const SizedBox(height: 8),
               if (_isNotEmpty(supplierNumber))
-                KeyValueRow(label: 'Supplier Number', value: _kvText(supplierNumber!)),
+                KeyValueRow(
+                  label: 'Supplier Number',
+                  value: _kvText(supplierNumber!),
+                ),
               if (_isNotEmpty(warrantyUntil)) const SizedBox(height: 8),
               if (_isNotEmpty(warrantyUntil))
-                KeyValueRow(label: 'Warranty Until', value: _kvText(warrantyUntil!)),
+                KeyValueRow(
+                  label: 'Warranty Until',
+                  value: _kvText(warrantyUntil!),
+                ),
             ],
           ),
         ),
@@ -1236,7 +1339,13 @@ class InventoryDetailsScreen extends StatelessWidget {
     }
 
     // ===== Request Item Details =====
-    final bool showRequestItem = _any([requestId, requestQuantity, dateNeeded, reqLocation, requestUnit]);
+    final bool showRequestItem = _any([
+      requestId,
+      requestQuantity,
+      dateNeeded,
+      reqLocation,
+      requestUnit,
+    ]);
     if (showRequestItem) {
       sections.add(
         _Section(
@@ -1247,7 +1356,10 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Request ID', value: _kvText(requestId!)),
               if (_isNotEmpty(requestQuantity)) const SizedBox(height: 8),
               if (_isNotEmpty(requestQuantity))
-                KeyValueRow(label: 'Quantity', value: _kvText(requestQuantity!)),
+                KeyValueRow(
+                  label: 'Quantity',
+                  value: _kvText(requestQuantity!),
+                ),
               if (_isNotEmpty(requestUnit)) const SizedBox(height: 8),
               if (_isNotEmpty(requestUnit))
                 KeyValueRow(label: 'Unit', value: _kvText(requestUnit!)),
@@ -1256,7 +1368,10 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Date Needed', value: _kvText(dateNeeded!)),
               if (_isNotEmpty(reqLocation)) const SizedBox(height: 8),
               if (_isNotEmpty(reqLocation))
-                KeyValueRow(label: 'Location / Unit', value: _kvText(reqLocation!)),
+                KeyValueRow(
+                  label: 'Location / Unit',
+                  value: _kvText(reqLocation!),
+                ),
             ],
           ),
         ),
@@ -1275,7 +1390,10 @@ class InventoryDetailsScreen extends StatelessWidget {
                 KeyValueRow(label: 'Staff Name', value: _kvText(staffName!)),
               if (_isNotEmpty(staffDepartment)) const SizedBox(height: 8),
               if (_isNotEmpty(staffDepartment))
-                KeyValueRow(label: 'Department', value: DepartmentTag(staffDepartment!)),
+                KeyValueRow(
+                  label: 'Department',
+                  value: DepartmentTag(staffDepartment!),
+                ),
             ],
           ),
         ),
@@ -1338,21 +1456,21 @@ class InventoryDetailsScreen extends StatelessWidget {
   }
 
   static Widget _kvText(String text) => Text(
-        text,
-        textAlign: TextAlign.right,
-        style: const TextStyle(
-          color: Color(0xFF475467),
-          fontSize: 13,
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w400,
-          height: 1.85,
-        ),
-      );
+    text,
+    textAlign: TextAlign.right,
+    style: const TextStyle(
+      color: Color(0xFF475467),
+      fontSize: 13,
+      fontFamily: 'Inter',
+      fontWeight: FontWeight.w400,
+      height: 1.85,
+    ),
+  );
 
   Widget _divider() => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 16),
-        child: Divider(thickness: 1, color: Color(0xFFE4E7EC)),
-      );
+    padding: EdgeInsets.symmetric(vertical: 16),
+    child: Divider(thickness: 1, color: Color(0xFFE4E7EC)),
+  );
 }
 
 // UI HELPERS -------------------------------
@@ -1364,17 +1482,16 @@ class _Section extends StatelessWidget {
   const _Section({this.title, required this.child});
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (title != null) ...[
-            Text(title!, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-          ],
-          child,
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (title != null) ...[
+        Text(title!, style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+      ],
+      child,
+    ],
+  );
 }
-
 
 // "Aug 12, 2025"
 String formatDateRequested(String input) {
@@ -1432,10 +1549,11 @@ String formatSchedule(String input) {
 
   // If still not parseable, normalize dash/spacing and return.
   if (dt == null) {
-    final cleaned = s
-        .replaceAll(RegExp(r'\s*-\s*'), ' – ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    final cleaned =
+        s
+            .replaceAll(RegExp(r'\s*-\s*'), ' – ')
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
     return cleaned;
   }
 
@@ -1445,40 +1563,43 @@ String formatSchedule(String input) {
       RegExp(r'\b(am|pm)\b', caseSensitive: false).hasMatch(s);
   final hasTimeInDt = dt.hour != 0 || dt.minute != 0 || dt.second != 0;
 
-  final fmt = (hasTimeInText || hasTimeInDt)
-      ? DateFormat('MMM d, h:mm a')
-      : DateFormat('MMM d');
+  final fmt =
+      (hasTimeInText || hasTimeInDt)
+          ? DateFormat('MMM d, h:mm a')
+          : DateFormat('MMM d');
   return fmt.format(dt);
 }
 
 // ---- Small UI helpers ----
-Widget ffDivider() => const Divider(height: 1, thickness: 1, color: Color(0xFFEAECF0));
+Widget ffDivider() =>
+    const Divider(height: 1, thickness: 1, color: Color(0xFFEAECF0));
 
 Widget brokenThumb({double h = 80, double w = 140}) => Container(
-      height: h,
-      width: w,
-      color: const Color(0xFFEAECF0),
-      alignment: Alignment.center,
-      child: const Icon(Icons.broken_image, color: Color(0xFF98A2B3)),
-    );
+  height: h,
+  width: w,
+  color: const Color(0xFFEAECF0),
+  alignment: Alignment.center,
+  child: const Icon(Icons.broken_image, color: Color(0xFF98A2B3)),
+);
 
 Widget _thumb(String url, {double h = 80, double w = 140}) {
   final isNetwork = url.startsWith('http');
-  final img = isNetwork
-      ? Image.network(
-          url,
-          height: h,
-          width: w,
-          fit: BoxFit.cover,
-          errorBuilder: (context, _, __) => brokenThumb(h: h, w: w),
-        )
-      : Image.asset(
-          url,
-          height: h,
-          width: w,
-          fit: BoxFit.cover,
-          errorBuilder: (context, _, __) => brokenThumb(h: h, w: w),
-        );
+  final img =
+      isNetwork
+          ? Image.network(
+            url,
+            height: h,
+            width: w,
+            fit: BoxFit.cover,
+            errorBuilder: (context, _, __) => brokenThumb(h: h, w: w),
+          )
+          : Image.asset(
+            url,
+            height: h,
+            width: w,
+            fit: BoxFit.cover,
+            errorBuilder: (context, _, __) => brokenThumb(h: h, w: w),
+          );
   return ClipRRect(borderRadius: BorderRadius.circular(4), child: img);
 }
 
@@ -1513,13 +1634,14 @@ class KeyValueRow extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         softWrap: false,
-        style: (valueStyle ??
-            const TextStyle(
-              fontFamily: 'Inter',
-              color: Color(0xFF344054),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            )),
+        style:
+            (valueStyle ??
+                const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF344054),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                )),
       ),
     );
   }
@@ -1585,14 +1707,7 @@ class _SectionCard extends StatelessWidget {
   final EdgeInsets? margin;
   final bool hideIfEmpty;
 
-  const _SectionCard({
-    this.title,
-    this.content,
-    this.child,
-    this.padding = const EdgeInsets.all(16),
-    this.margin,
-    this.hideIfEmpty = false,
-  });
+  const _SectionCard({this.title, this.content});
 
   @override
   Widget build(BuildContext context) {
@@ -1654,10 +1769,12 @@ class _SectionCard extends StatelessWidget {
 
 // simple initials helper used by avatar
 String _initials(String fullName) {
-  final parts = fullName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  final parts =
+      fullName.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
   if (parts.isEmpty) return '';
   if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-  return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+      .toUpperCase();
 }
 
 // Details Permit

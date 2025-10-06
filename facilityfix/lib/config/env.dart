@@ -7,7 +7,7 @@ class AppEnv {
   static AppRole role = AppRole.tenant;
 
   /// When testing on a physical device, set this to your laptop’s LAN IP.
-  static String? lanIp = '192.168.1.12';
+  static String? lanIp = '';
 
   static const String _WEB_API = 'http://localhost:8000';
 
@@ -24,9 +24,9 @@ class AppEnv {
   };
 
   static Map<AppRole, String> _deviceHosts(String ip) => {
-    AppRole.tenant: 'http://192.168.1.12:8000',
-    AppRole.staff: 'http://192.168.1.12:8000',
-    AppRole.admin: 'http://192.168.1.12:8000',
+    AppRole.tenant: 'http://192.168.18.10:8000',
+    AppRole.staff: 'http://192.168.18.10:8000',
+    AppRole.admin: 'http://192.168.18.10:8000',
   };
 
   /// Default per-platform base URL (localhost for web/desktop, emulator loopback, etc.)
