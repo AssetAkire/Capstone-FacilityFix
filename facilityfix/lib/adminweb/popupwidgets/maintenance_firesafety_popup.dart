@@ -27,6 +27,9 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
   int? selectedTaskIndex;
   late List<Map<String, dynamic>> tasks;
 
+  // Width used by the new checkbox column to keep layout tidy
+  static const double _checkColWidth = 40;
+
   @override
   void initState() {
     super.initState();
@@ -126,6 +129,12 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  // Helper: evaluate if a task is completed based on its status
+  bool _isTaskCompleted(Map<String, dynamic> task) {
+    final status = (task['status'] as String?)?.trim().toLowerCase();
+    return status == 'completed';
   }
 
   @override
@@ -263,27 +272,44 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
           ),
           child: Row(
             children: [
+              // Spacer to align with delete icon when in edit mode 
               if (isEditMode) const SizedBox(width: 40),
-              Expanded(
-                flex: 3,
-                child: Center(
-                  child: const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Details/Task',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
+
+              // checkbox column header 
+              SizedBox(
+                width: _checkColWidth,
+                child: const Center(
+                  child: Text(
+                    '',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
                     ),
                   ),
                 ),
               ),
+
+              // Details/Task
+              Expanded(
+                flex: 3,
+                child: const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Details/Task',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+              // Assigned
               Expanded(
                 flex: 1,
-                child: Center(
-                  child: const Text(
+                child: const Center(
+                  child: Text(
                     'Assigned',
                     style: TextStyle(
                       fontSize: 14,
@@ -294,10 +320,11 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
                   ),
                 ),
               ),
+              // Rotation
               Expanded(
                 flex: 1,
-                child: Center(
-                  child: const Text(
+                child: const Center(
+                  child: Text(
                     'Rotation',
                     style: TextStyle(
                       fontSize: 14,
@@ -308,10 +335,11 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
                   ),
                 ),
               ),
+              // Status
               Expanded(
                 flex: 1,
-                child: Center(
-                  child: const Text(
+                child: const Center(
+                  child: Text(
                     'Status',
                     style: TextStyle(
                       fontSize: 14,
@@ -336,6 +364,7 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
   Widget _buildTaskRow(int index) {
     final task = tasks[index];
     final isSelected = selectedTaskIndex == index;
+    final isCompleted = _isTaskCompleted(task);
 
     return InkWell(
       onTap: isEditMode
@@ -362,6 +391,7 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            // Keep delete button behavior/placement as-is
             if (isEditMode)
               IconButton(
                 onPressed: () => _deleteTask(index),
@@ -369,6 +399,32 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 40),
               ),
+
+            // NEW: Auto-checking checkbox column linked to task status
+            SizedBox(
+              width: _checkColWidth,
+              child: Center(
+                child: Checkbox(
+                  value: isCompleted,
+                  // In view mode, it's read-only; in edit mode, toggling updates status.
+                  onChanged: isEditMode
+                      ? (bool? value) {
+                          setState(() {
+                            if (value == true) {
+                              tasks[index]['status'] = 'Completed';
+                            } else {
+                              // Simple fallback when unchecked in edit mode
+                              tasks[index]['status'] = 'Pending';
+                            }
+                          });
+                        }
+                      : null,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+
+            // Details/Task 
             Expanded(
               flex: 3,
               child: isEditMode
@@ -399,6 +455,8 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
                     ),
             ),
             const SizedBox(width: 16),
+
+            // Assigned 
             Expanded(
               flex: 1,
               child: isEditMode
@@ -434,6 +492,8 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
                     ),
             ),
             const SizedBox(width: 16),
+
+            // Rotation 
             Expanded(
               flex: 1,
               child: isEditMode
@@ -486,6 +546,8 @@ class _FireSafetyDialogState extends State<FireSafetyDialog> {
                     ),
             ),
             const SizedBox(width: 16),
+
+            // Status 
             Expanded(
               flex: 1,
               child: Center(

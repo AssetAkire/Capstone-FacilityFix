@@ -24,6 +24,7 @@ import 'adminweb/pages/webinventoryitems_viewdetails.dart';
 import 'adminweb/pages/createwebannouncement_page.dart';
 import 'adminweb/pages/adminsettings_page.dart';
 import 'adminweb/pages/adminwebprofile_page.dart';
+import 'adminweb/pages/loadingscreen_page.dart';
 
 
 
@@ -80,10 +81,34 @@ class _MyAppState extends State<MyApp> {
     _router = GoRouter(
       initialLocation: '/',
       routes: [
+        // --- Loading Screen ---
         GoRoute(
           path: '/',
+          name: 'loading',
+          pageBuilder: (context, state) => CustomTransitionPage(
+            key: state.pageKey,
+            child: const LoadingScreenPage(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          ),
+        ),
+
+        // --- Login Page with fade transition ---
+        GoRoute(
+          path: '/login',
           name: 'login',
-          builder: (context, state) => const LoginPage(),
+          pageBuilder: (context, state) => CustomTransitionPage(
+            key: state.pageKey,
+            child: const LoginPage(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              final curvedAnimation = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeInOut,
+              );
+              return FadeTransition(opacity: curvedAnimation, child: child);
+            },
+          ),
         ),
         GoRoute(
           path: '/dashboard',

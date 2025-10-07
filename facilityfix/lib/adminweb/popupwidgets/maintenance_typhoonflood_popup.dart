@@ -27,6 +27,9 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
   int? selectedTaskIndex;
   late List<Map<String, dynamic>> tasks;
 
+  // NEW: narrow width for the checkbox column
+  static const double _checkColWidth = 40;
+
   @override
   void initState() {
     super.initState();
@@ -38,36 +41,31 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
   List<Map<String, dynamic>> _getDefaultTasks() {
     return [
       {
-        'name':
-            'Electrical safety inspection',
+        'name': 'Electrical safety inspection',
         'assigned': null,
         'rotation': 'Annually',
         'status': 'In Progress',
       },
       {
-        'name':
-            'Plumbing & drainage restoration',
+        'name': 'Plumbing & drainage restoration',
         'assigned': null,
         'rotation': 'Annually',
         'status': null,
       },
       {
-        'name':
-            'Building envelope & roof inspection',
+        'name': 'Building envelope & roof inspection',
         'assigned': null,
         'rotation': 'Annually',
         'status': null,
       },
       {
-        'name':
-            'Generator & fuel system check',
+        'name': 'Generator & fuel system check',
         'assigned': null,
         'rotation': 'Annually',
         'status': null,
       },
       {
-        'name':
-            'Mold & IAQ control',
+        'name': 'Mold & IAQ control',
         'assigned': null,
         'rotation': 'Annually',
         'status': null,
@@ -129,6 +127,12 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  // NEW: helper to evaluate completion from status
+  bool _isTaskCompleted(Map<String, dynamic> task) {
+    final status = (task['status'] as String?)?.trim().toLowerCase();
+    return status == 'completed';
   }
 
   @override
@@ -258,7 +262,24 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
           ),
           child: Row(
             children: [
+              // Keep spacing for delete icon when in edit mode
               if (isEditMode) const SizedBox(width: 40),
+
+              // checkbox column 
+              SizedBox(
+                width: _checkColWidth,
+                child: const Center(
+                  child: Text(
+                    '',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+
               const Expanded(
                 flex: 3,
                 child: Align(
@@ -325,6 +346,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
   Widget _buildTaskRow(int index) {
     final task = tasks[index];
     final isSelected = selectedTaskIndex == index;
+    final isCompleted = _isTaskCompleted(task);
 
     return InkWell(
       onTap: isEditMode
@@ -355,6 +377,29 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 40),
               ),
+
+            // NEW: auto-checking checkbox linked to status
+            SizedBox(
+              width: _checkColWidth,
+              child: Center(
+                child: Checkbox(
+                  value: isCompleted,
+                  onChanged: isEditMode
+                      ? (bool? value) {
+                          setState(() {
+                            if (value == true) {
+                              tasks[index]['status'] = 'Completed';
+                            } else {
+                              tasks[index]['status'] = 'Pending';
+                            }
+                          });
+                        }
+                      : null, // read-only when not editing
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+
             Expanded(
               flex: 3,
               child: isEditMode
@@ -369,17 +414,23 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                       ),
                       decoration: const InputDecoration(
                         isDense: true,
-                        contentPadding:
-                            EdgeInsets.symmetric(
-                              horizontal: 8, 
-                              vertical: 8
-                            ),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 8,
+                        ),
                         border: OutlineInputBorder(),
                       ),
                     )
-                  : Text(task['name'], style: const TextStyle(fontSize: 14, color: Colors.black87,)),
+                  : Text(
+                      task['name'],
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
+                    ),
             ),
             const SizedBox(width: 16),
+
             Expanded(
               flex: 1,
               child: isEditMode
@@ -401,12 +452,16 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                   : Center(
                       child: Text(
                         task['assigned'] ?? 'Null',
-                        style: const TextStyle(fontSize: 14, color: Colors.black87,),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ),
             ),
             const SizedBox(width: 16),
+
             Expanded(
               flex: 1,
               child: isEditMode
@@ -439,8 +494,10 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                         ),
                         decoration: const InputDecoration(
                           isDense: true,
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -453,6 +510,7 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                     ),
             ),
             const SizedBox(width: 16),
+
             Expanded(
               flex: 1,
               child: Center(
@@ -550,8 +608,8 @@ class _TyphoonFloodDialogState extends State<TyphoonFloodDialog> {
                 });
               },
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 32, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
               ),
               child: const Text(
                 'Cancel',

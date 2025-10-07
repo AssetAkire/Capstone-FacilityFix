@@ -27,6 +27,9 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
   int? selectedTaskIndex;
   late List<Map<String, dynamic>> tasks;
 
+  // Width for the new checkbox column to keep layout tidy
+  static const double _checkColWidth = 40;
+
   @override
   void initState() {
     super.initState();
@@ -118,6 +121,12 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  // Helper: determine if a task is completed based on its status
+  bool _isTaskCompleted(Map<String, dynamic> task) {
+    final status = (task['status'] as String?)?.trim().toLowerCase();
+    return status == 'completed';
   }
 
   @override
@@ -247,7 +256,24 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
           ),
           child: Row(
             children: [
+              // Keep spacing for delete icon when in edit mode 
               if (isEditMode) const SizedBox(width: 40),
+
+              // checkbox column  
+              SizedBox(
+                width: _checkColWidth,
+                child: const Center(
+                  child: Text(
+                    '',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+
               const Expanded(
                 flex: 3,
                 child: Align(
@@ -317,6 +343,7 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
   Widget _buildTaskRow(int index) {
     final task = tasks[index];
     final isSelected = selectedTaskIndex == index;
+    final isCompleted = _isTaskCompleted(task);
 
     return InkWell(
       onTap: isEditMode
@@ -350,6 +377,33 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 40),
               ),
+
+            // NEW: Auto-checking checkbox column linked to task status
+            SizedBox(
+              width: _checkColWidth,
+              child: Center(
+                child: Checkbox(
+                  value: isCompleted,
+                  // In view mode, it's read-only; in edit mode, toggling updates status.
+                  onChanged: isEditMode
+                      ? (bool? value) {
+                          setState(() {
+                            if (value == true) {
+                              tasks[index]['status'] = 'Completed';
+                            } else {
+                              // Simple fallback when unchecked in edit mode
+                              tasks[index]['status'] = 'Pending';
+                            }
+                          });
+                        }
+                      : null,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ),
+
+            // Details/Task 
+            const SizedBox(width: 0),
             Expanded(
               flex: 3,
               child: isEditMode
@@ -380,6 +434,8 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                     ),
             ),
             const SizedBox(width: 16),
+
+            // Assigned 
             Expanded(
               flex: 1,
               child: isEditMode
@@ -415,6 +471,8 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                     ),
             ),
             const SizedBox(width: 16),
+
+            // Rotation 
             Expanded(
               flex: 1,
               child: isEditMode
@@ -467,6 +525,8 @@ class _EarthquakeDialogState extends State<EarthquakeDialog> {
                     ),
             ),
             const SizedBox(width: 16),
+
+            // Status 
             Expanded(
               flex: 1,
               child: Center(
