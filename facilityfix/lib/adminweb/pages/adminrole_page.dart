@@ -31,26 +31,42 @@ class _AdminRolePageState extends State<AdminRolePage> {
           'icon': Icons.group,
           'color': Colors.green,
           'actions': [
-            {'name': 'View Users', 'description': 'See all users in the system'},
-            {'name': 'Create Users', 'description': 'Add new users to the system'},
-            {'name': 'Edit Users', 'description': 'Update user details, roles, and access'},
-            {'name': 'Delete Users', 'description': 'Remove users from the system'},
-          ]
+            {
+              'name': 'View Users',
+              'description': 'See all users in the system',
+            },
+            {
+              'name': 'Create Users',
+              'description': 'Add new users to the system',
+            },
+            {
+              'name': 'Edit Users',
+              'description': 'Update user details, roles, and access',
+            },
+            {
+              'name': 'Delete Users',
+              'description': 'Remove users from the system',
+            },
+          ],
         },
         {
           'category': 'Role & Access Control',
           'icon': Icons.security,
           'color': Colors.blue,
           'actions': [
-            {'name': 'Assign roles and manage user permissions', 'description': ''},
-          ]
+            {
+              'name': 'Assign roles and manage user permissions',
+              'description': '',
+            },
+          ],
         },
-      ]
+      ],
     },
     {
       'id': 'maintenance_department',
       'name': 'MAINTENANCE DEPARTMENT',
-      'description': 'Access to work orders, maintenance scheduling, and inventory management.',
+      'description':
+          'Access to work orders, maintenance scheduling, and inventory management.',
       'userCount': 4,
       'permissions': [
         {
@@ -58,25 +74,38 @@ class _AdminRolePageState extends State<AdminRolePage> {
           'icon': Icons.build,
           'color': Colors.orange,
           'actions': [
-            {'name': 'Create Work Orders', 'description': 'Generate new maintenance tasks'},
-            {'name': 'Update Work Orders', 'description': 'Modify existing work orders'},
-            {'name': 'View Work Orders', 'description': 'Access all work order information'},
-          ]
+            {
+              'name': 'Create Work Orders',
+              'description': 'Generate new maintenance tasks',
+            },
+            {
+              'name': 'Update Work Orders',
+              'description': 'Modify existing work orders',
+            },
+            {
+              'name': 'View Work Orders',
+              'description': 'Access all work order information',
+            },
+          ],
         },
         {
           'category': 'Inventory Management',
           'icon': Icons.inventory,
           'color': Colors.purple,
           'actions': [
-            {'name': 'Manage Inventory', 'description': 'Control inventory items and requests'},
-          ]
+            {
+              'name': 'Manage Inventory',
+              'description': 'Control inventory items and requests',
+            },
+          ],
         },
-      ]
+      ],
     },
     {
       'id': 'tenants',
       'name': 'TENANTS',
-      'description': 'Limited access to submit repair requests and view updates, announcements, and shared calendars.',
+      'description':
+          'Limited access to submit repair requests and view updates, announcements, and shared calendars.',
       'userCount': 4,
       'permissions': [
         {
@@ -84,19 +113,28 @@ class _AdminRolePageState extends State<AdminRolePage> {
           'icon': Icons.build_circle,
           'color': Colors.red,
           'actions': [
-            {'name': 'Submit Requests', 'description': 'Create new repair requests'},
-            {'name': 'View Request Status', 'description': 'Track repair request progress'},
-          ]
+            {
+              'name': 'Submit Requests',
+              'description': 'Create new repair requests',
+            },
+            {
+              'name': 'View Request Status',
+              'description': 'Track repair request progress',
+            },
+          ],
         },
         {
           'category': 'Announcements',
           'icon': Icons.announcement,
           'color': Colors.amber,
           'actions': [
-            {'name': 'View Announcements', 'description': 'Read system announcements'},
-          ]
+            {
+              'name': 'View Announcements',
+              'description': 'Read system announcements',
+            },
+          ],
         },
-      ]
+      ],
     },
   ];
 
@@ -192,16 +230,18 @@ class _AdminRolePageState extends State<AdminRolePage> {
     }
   }
 
-
   // ---- Filtered Roles List ----
   List<Map<String, dynamic>> get _filteredRoles {
     return _allRoles.where((role) {
       final q = _searchController.text.toLowerCase();
-      final matchesSearch = q.isEmpty ||
+      final matchesSearch =
+          q.isEmpty ||
           role['name'].toString().toLowerCase().contains(q) ||
           role['description'].toString().toLowerCase().contains(q);
 
-      final matchesRole = _selectedRoleFilter == 'All Roles' || role['name'] == _selectedRoleFilter;
+      final matchesRole =
+          _selectedRoleFilter == 'All Roles' ||
+          role['name'] == _selectedRoleFilter;
       final matchesStatus = _selectedStatusFilter == 'All Status';
 
       return matchesSearch && matchesRole && matchesStatus;
@@ -259,7 +299,12 @@ class _AdminRolePageState extends State<AdminRolePage> {
   }
 
   // ---- Filter Dropdown Builder ----
-  Widget _buildFilterDropdown(String label, String value, List<String> options, Function(String) onChanged) {
+  Widget _buildFilterDropdown(
+    String label,
+    String value,
+    List<String> options,
+    Function(String) onChanged,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -271,12 +316,16 @@ class _AdminRolePageState extends State<AdminRolePage> {
         child: DropdownButton<String>(
           value: value,
           isDense: true,
-          items: options.map((String option) {
-            return DropdownMenuItem<String>(
-              value: option,
-              child: Text('$label: $option', style: const TextStyle(fontSize: 14)),
-            );
-          }).toList(),
+          items:
+              options.map((String option) {
+                return DropdownMenuItem<String>(
+                  value: option,
+                  child: Text(
+                    '$label: $option',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                );
+              }).toList(),
           onChanged: (String? newValue) {
             if (newValue != null) {
               onChanged(newValue);
@@ -293,16 +342,16 @@ class _AdminRolePageState extends State<AdminRolePage> {
 
     return GestureDetector(
       onTap: () {
-    setState(() {
-      if (isSelected) {
-        _selectedRoleId = null;
-        //_selectedRole = null;
-      } else {
-        _selectedRoleId = role['id'];
-        //_selectedRole = role; 
-      }
-    });
-  },
+        setState(() {
+          if (isSelected) {
+            _selectedRoleId = null;
+            //_selectedRole = null;
+          } else {
+            _selectedRoleId = role['id'];
+            //_selectedRole = role;
+          }
+        });
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(20),
@@ -347,10 +396,7 @@ class _AdminRolePageState extends State<AdminRolePage> {
                   const SizedBox(height: 12),
                   Text(
                     '${role['userCount']} user${role['userCount'] != 1 ? 's' : ''}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade500,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                   ),
                 ],
               ),
@@ -362,16 +408,24 @@ class _AdminRolePageState extends State<AdminRolePage> {
                 IconButton(
                   icon: const Icon(Icons.edit, color: Colors.blue),
                   onPressed: () {
-                    final hasKeys = (role['permissionKeys'] is List) && (role['permissionKeys'] as List).isNotEmpty;
+                    final hasKeys =
+                        (role['permissionKeys'] is List) &&
+                        (role['permissionKeys'] as List).isNotEmpty;
 
                     // Prepare initialRole for dialog (name, description, permissions)
                     final initialRole = <String, dynamic>{
                       'id': role['id'],
                       'name': role['name'],
                       'description': role['description'],
-                      'permissions': hasKeys
-                          ? _permissionKeysToDialogMap(List<String>.from(role['permissionKeys']))
-                          : <String, Map<String, bool>>{}, // legacy roles open with no checks
+                      'permissions':
+                          hasKeys
+                              ? _permissionKeysToDialogMap(
+                                List<String>.from(role['permissionKeys']),
+                              )
+                              : <
+                                String,
+                                Map<String, bool>
+                              >{}, // legacy roles open with no checks
                     };
 
                     RoleDialog.showEdit(
@@ -382,16 +436,22 @@ class _AdminRolePageState extends State<AdminRolePage> {
                           // Convert back to page display + keep keys
                           final updatedKeys = <String>[];
                           final displayPerms = _dialogPermsToDisplayList(
-                            Map<String, Map<String, bool>>.from(updated['permissions'] ?? {}),
+                            Map<String, Map<String, bool>>.from(
+                              updated['permissions'] ?? {},
+                            ),
                             updatedKeys,
                           );
 
-                          final idx = _allRoles.indexWhere((r) => r['id'] == role['id']);
+                          final idx = _allRoles.indexWhere(
+                            (r) => r['id'] == role['id'],
+                          );
                           if (idx != -1) {
                             _allRoles[idx] = {
                               ..._allRoles[idx],
                               'name': updated['name'] ?? _allRoles[idx]['name'],
-                              'description': updated['description'] ?? _allRoles[idx]['description'],
+                              'description':
+                                  updated['description'] ??
+                                  _allRoles[idx]['description'],
                               'permissions': displayPerms,
                               'permissionKeys': updatedKeys,
                             };
@@ -406,27 +466,35 @@ class _AdminRolePageState extends State<AdminRolePage> {
                   onPressed: () {
                     showDialog(
                       context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text("Delete Role"),
-                        content: const Text("Are you sure you want to delete this role?"),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(ctx).pop(), // Cancel
-                            child: const Text("Cancel"),
+                      builder:
+                          (ctx) => AlertDialog(
+                            title: const Text("Delete Role"),
+                            content: const Text(
+                              "Are you sure you want to delete this role?",
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed:
+                                    () => Navigator.of(ctx).pop(), // Cancel
+                                child: const Text("Cancel"),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _allRoles.removeWhere(
+                                      (r) => r['id'] == role['id'],
+                                    );
+                                    //_filteredRoles = List.from(_allRoles);
+                                  });
+                                  Navigator.of(ctx).pop();
+                                },
+                                child: const Text("Delete"),
+                              ),
+                            ],
                           ),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                            onPressed: () {
-                              setState(() {
-                                _allRoles.removeWhere((r) => r['id'] == role['id']);
-                                //_filteredRoles = List.from(_allRoles);
-                              });
-                              Navigator.of(ctx).pop();
-                            },
-                            child: const Text("Delete"),
-                          ),
-                        ],
-                      ),
                     );
                   },
                 ),
@@ -483,10 +551,15 @@ class _AdminRolePageState extends State<AdminRolePage> {
     }
 
     // get selected role
-    final selectedRole = _allRoles.firstWhere((role) => role['id'] == _selectedRoleId);
+    final selectedRole = _allRoles.firstWhere(
+      (role) => role['id'] == _selectedRoleId,
+    );
 
     // ensure permissions is a List
-    final List permissions = (selectedRole['permissions'] is List) ? List.from(selectedRole['permissions']) : [];
+    final List permissions =
+        (selectedRole['permissions'] is List)
+            ? List.from(selectedRole['permissions'])
+            : [];
 
     return Container(
       decoration: BoxDecoration(
@@ -537,10 +610,7 @@ class _AdminRolePageState extends State<AdminRolePage> {
                 const SizedBox(height: 8),
                 Text(
                   'Users with this role: ${selectedRole['userCount'] ?? 0}', // default to 0
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
                 ),
                 const SizedBox(height: 16),
                 const Text(
@@ -571,10 +641,20 @@ class _AdminRolePageState extends State<AdminRolePage> {
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
               itemCount: permissions.length,
               itemBuilder: (context, index) {
-                final permission = (permissions[index] ?? {}) as Map<String, dynamic>;
-                final IconData permissionIcon = permission['icon'] is IconData ? permission['icon'] as IconData : Icons.lock_outline;
-                final Color permissionColor = permission['color'] is Color ? permission['color'] as Color : Colors.grey;
-                final List actions = permission['actions'] is List ? List.from(permission['actions']) : [];
+                final permission =
+                    (permissions[index] ?? {}) as Map<String, dynamic>;
+                final IconData permissionIcon =
+                    permission['icon'] is IconData
+                        ? permission['icon'] as IconData
+                        : Icons.lock_outline;
+                final Color permissionColor =
+                    permission['color'] is Color
+                        ? permission['color'] as Color
+                        : Colors.grey;
+                final List actions =
+                    permission['actions'] is List
+                        ? List.from(permission['actions'])
+                        : [];
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -608,8 +688,15 @@ class _AdminRolePageState extends State<AdminRolePage> {
                             ),
                             const SizedBox(height: 8),
                             ...actions.map<Widget>((action) {
-                              final String name = (action is Map && action['name'] != null) ? action['name'].toString() : action.toString();
-                              final String desc = (action is Map && action['description'] != null) ? action['description'].toString() : '';
+                              final String name =
+                                  (action is Map && action['name'] != null)
+                                      ? action['name'].toString()
+                                      : action.toString();
+                              final String desc =
+                                  (action is Map &&
+                                          action['description'] != null)
+                                      ? action['description'].toString()
+                                      : '';
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 4),
                                 child: Column(
@@ -756,7 +843,10 @@ class _AdminRolePageState extends State<AdminRolePage> {
 
                 // Filter Button
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey.shade300),
                     borderRadius: BorderRadius.circular(8),
@@ -779,7 +869,9 @@ class _AdminRolePageState extends State<AdminRolePage> {
                 OutlinedButton.icon(
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Export feature coming soon!')),
+                      const SnackBar(
+                        content: Text('Export feature coming soon!'),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.download, size: 18),
@@ -787,7 +879,10 @@ class _AdminRolePageState extends State<AdminRolePage> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.grey.shade700,
                     side: BorderSide(color: Colors.grey.shade300),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
                 ),
               ],
@@ -854,23 +949,39 @@ class _AdminRolePageState extends State<AdminRolePage> {
                                         setState(() {
                                           // newRole['permissions'] is nested map -> convert to display + keep keys
                                           final keys = <String>[];
-                                          final displayPerms = _dialogPermsToDisplayList(
-                                            Map<String, Map<String, bool>>.from(newRole['permissions'] ?? {}),
-                                            keys,
-                                          );
+                                          final displayPerms =
+                                              _dialogPermsToDisplayList(
+                                                Map<
+                                                  String,
+                                                  Map<String, bool>
+                                                >.from(
+                                                  newRole['permissions'] ?? {},
+                                                ),
+                                                keys,
+                                              );
 
                                           final normalized = <String, dynamic>{
-                                            'id': (newRole['id'] ?? DateTime.now().millisecondsSinceEpoch).toString(),
-                                            'name': newRole['name'] ?? newRole['roleName'] ?? '',
-                                            'description': newRole['description'] ?? '',
-                                            'userCount': newRole['userCount'] ?? 0,
+                                            'id':
+                                                (newRole['id'] ??
+                                                        DateTime.now()
+                                                            .millisecondsSinceEpoch)
+                                                    .toString(),
+                                            'name':
+                                                newRole['name'] ??
+                                                newRole['roleName'] ??
+                                                '',
+                                            'description':
+                                                newRole['description'] ?? '',
+                                            'userCount':
+                                                newRole['userCount'] ?? 0,
                                             'permissions': displayPerms,
                                             // keep a flat list for edit round-trip:
                                             'permissionKeys': keys,
                                           };
 
                                           _allRoles.add(normalized);
-                                          _selectedRoleId = normalized['id']; // auto-select
+                                          _selectedRoleId =
+                                              normalized['id']; // auto-select
                                         });
                                       },
                                     );
@@ -880,8 +991,13 @@ class _AdminRolePageState extends State<AdminRolePage> {
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blue,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
                                 ),
                               ],

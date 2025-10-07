@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
+import '../services/api_service.dart';
 
 class AdminWebAnalyticsPage extends StatefulWidget {
   const AdminWebAnalyticsPage({super.key});
@@ -18,89 +19,180 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   String selectedStatus = 'All';
   String selectedDowntimeUnit = 'This Month';
 
-  // Mock data for heat map - represents repair requests per unit/floor
-  final Map<String, List<HeatMapData>> heatMapData = {
-    'Floor 1': [
-      HeatMapData('101', 2, Colors.yellow),
-      HeatMapData('102', 0, Colors.green),
-      HeatMapData('103', 3, Colors.red),
-      HeatMapData('104', 2, Colors.orange),
-      HeatMapData('105', 2, Colors.orange),
-      HeatMapData('106', 3, Colors.red),
-    ],
-    'Floor 2': [
-      HeatMapData('201', 2, Colors.orange),
-      HeatMapData('202', 0, Colors.green),
-      HeatMapData('203', 1, Colors.yellow),
-      HeatMapData('204', 1, Colors.yellow),
-      HeatMapData('205', 3, Colors.red),
-      HeatMapData('206', 0, Colors.green),
-    ],
-    'Floor 3': [
-      HeatMapData('301', 3, Colors.red),
-      HeatMapData('302', 0, Colors.green),
-      HeatMapData('303', 3, Colors.red),
-      HeatMapData('304', 3, Colors.red),
-      HeatMapData('305', 2, Colors.orange),
-      HeatMapData('306', 3, Colors.red),
-    ],
-    'Floor 4': [
-      HeatMapData('401', 3, Colors.red),
-      HeatMapData('402', 1, Colors.yellow),
-      HeatMapData('403', 0, Colors.green),
-      HeatMapData('404', 0, Colors.green),
-      HeatMapData('405', 0, Colors.green),
-      HeatMapData('406', 0, Colors.green),
-    ],
-    'Floor 5': [
-      HeatMapData('501', 1, Colors.yellow),
-      HeatMapData('502', 3, Colors.red),
-      HeatMapData('503', 3, Colors.red),
-      HeatMapData('504', 3, Colors.red),
-      HeatMapData('505', 0, Colors.green),
-      HeatMapData('506', 1, Colors.yellow),
-    ],
-    'Floor 6': [
-      HeatMapData('601', 3, Colors.red),
-      HeatMapData('602', 1, Colors.yellow),
-      HeatMapData('603', 2, Colors.orange),
-      HeatMapData('604', 3, Colors.red),
-      HeatMapData('605', 3, Colors.red),
-      HeatMapData('606', 2, Colors.orange),
-    ],
-    'Floor 7': [
-      HeatMapData('701', 0, Colors.green),
-      HeatMapData('702', 3, Colors.red),
-      HeatMapData('703', 0, Colors.green),
-      HeatMapData('704', 1, Colors.yellow),
-      HeatMapData('705', 3, Colors.red),
-      HeatMapData('706', 3, Colors.red),
-    ],
-    'Floor 8': [
-      HeatMapData('801', 2, Colors.orange),
-      HeatMapData('802', 3, Colors.red),
-      HeatMapData('803', 3, Colors.red),
-      HeatMapData('804', 3, Colors.red),
-      HeatMapData('805', 0, Colors.green),
-      HeatMapData('806', 3, Colors.red),
-    ],
-    'Floor 9': [
-      HeatMapData('901', 3, Colors.red),
-      HeatMapData('902', 1, Colors.yellow),
-      HeatMapData('903', 0, Colors.green),
-      HeatMapData('904', 3, Colors.red),
-      HeatMapData('905', 3, Colors.red),
-      HeatMapData('906', 1, Colors.yellow),
-    ],
-    'Floor 10': [
-      HeatMapData('1001', 3, Colors.red),
-      HeatMapData('1002', 1, Colors.yellow),
-      HeatMapData('1003', 3, Colors.red),
-      HeatMapData('1004', 2, Colors.orange),
-      HeatMapData('1005', 0, Colors.green),
-      HeatMapData('1006', 3, Colors.red),
-    ],
-  };
+  final ApiService _apiService = ApiService();
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  // Real data from backend
+  Map<String, dynamic>? _dashboardStats;
+  Map<String, dynamic>? _categoryBreakdown;
+  Map<String, dynamic>? _heatMapData;
+  Map<String, dynamic>? _workOrderTrends;
+
+  // Computed statistics
+  int _totalRequests = 0;
+  int _openIssues = 0;
+  int _resolvedToday = 0;
+  double _resolutionTime = 0.0;
+  Map<String, int> _categoryData = {};
+  Map<String, List<HeatMapData>> _buildingHeatMap = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAnalyticsData();
+  }
+
+  Future<void> _fetchAnalyticsData() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      print('[v0] Fetching analytics data...');
+
+      // Fetch data in parallel
+      final results = await Future.wait([
+        _apiService.getDashboardStats(),
+        _apiService.getCategoryBreakdown(),
+        _apiService.getHeatMapData(days: _getDaysFromDateRange()),
+        _apiService.getWorkOrderTrends(days: _getDaysFromDateRange()),
+      ]);
+
+      _dashboardStats = results[0];
+      _categoryBreakdown = results[1];
+      _heatMapData = results[2];
+      _workOrderTrends = results[3];
+
+      print('[v0] Dashboard stats: $_dashboardStats');
+      print('[v0] Category breakdown: $_categoryBreakdown');
+      print('[v0] Heat map data: $_heatMapData');
+
+      // Process the data
+      _processAnalyticsData();
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('[v0] Error fetching analytics data: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load analytics data: ${e.toString()}';
+      });
+    }
+  }
+
+  int _getDaysFromDateRange() {
+    switch (selectedDateRange) {
+      case 'This Week':
+        return 7;
+      case 'This Month':
+        return 30;
+      case 'Last Month':
+        return 30;
+      case 'Last 3 Months':
+        return 90;
+      default:
+        return 30;
+    }
+  }
+
+  void _processAnalyticsData() {
+    // Process dashboard stats
+    if (_dashboardStats != null) {
+      _totalRequests = _dashboardStats!['total_requests'] ?? 0;
+      _openIssues = _dashboardStats!['pending_concerns'] ?? 0;
+      _resolvedToday =
+          0; // Would need additional endpoint for today's completions
+      _resolutionTime =
+          2.4; // Would need to calculate from job completion times
+    }
+
+    // Process category breakdown
+    if (_categoryBreakdown != null) {
+      final categories =
+          _categoryBreakdown!['categories'] as Map<String, dynamic>?;
+      if (categories != null) {
+        _categoryData = categories.map(
+          (key, value) => MapEntry(key, value as int),
+        );
+      }
+    }
+
+    // Process heat map data
+    if (_heatMapData != null) {
+      _buildingHeatMap = _processHeatMapData(_heatMapData!);
+    }
+  }
+
+  Map<String, List<HeatMapData>> _processHeatMapData(
+    Map<String, dynamic> heatMapData,
+  ) {
+    final Map<String, List<HeatMapData>> result = {};
+
+    final heatMapMatrix = heatMapData['heat_map_matrix'] as List<dynamic>?;
+    if (heatMapMatrix == null) {
+      return _getDefaultHeatMapData(); // Fallback to mock data
+    }
+
+    // Group by floor/location
+    for (var locationData in heatMapMatrix) {
+      final location = locationData['location'] as String;
+      final categories = locationData['categories'] as Map<String, dynamic>;
+
+      // Calculate total issues for this location
+      final totalIssues = categories.values.fold<int>(
+        0,
+        (sum, count) => sum + (count as int),
+      );
+
+      // Determine color based on issue count
+      Color color;
+      if (totalIssues == 0) {
+        color = Colors.green;
+      } else if (totalIssues <= 2) {
+        color = Colors.yellow;
+      } else if (totalIssues <= 4) {
+        color = Colors.orange;
+      } else {
+        color = Colors.red;
+      }
+
+      // Extract floor number and unit from location (e.g., "Floor 1 - Unit 101")
+      final parts = location.split(' - ');
+      final floorKey = parts.isNotEmpty ? parts[0] : location;
+      final unitNumber =
+          parts.length > 1 ? parts[1].replaceAll('Unit ', '') : location;
+
+      if (!result.containsKey(floorKey)) {
+        result[floorKey] = [];
+      }
+
+      result[floorKey]!.add(HeatMapData(unitNumber, totalIssues, color));
+    }
+
+    // If no data, return default
+    if (result.isEmpty) {
+      return _getDefaultHeatMapData();
+    }
+
+    return result;
+  }
+
+  Map<String, List<HeatMapData>> _getDefaultHeatMapData() {
+    return {
+      'Floor 1': [
+        HeatMapData('101', 0, Colors.green),
+        HeatMapData('102', 0, Colors.green),
+        HeatMapData('103', 0, Colors.green),
+        HeatMapData('104', 0, Colors.green),
+        HeatMapData('105', 0, Colors.green),
+        HeatMapData('106', 0, Colors.green),
+      ],
+    };
+  }
 
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
@@ -161,175 +253,196 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
           _handleLogout(context);
         }
       },
-      body: SingleChildScrollView(
-        padding: EdgeInsets.all(isLargeScreen ? 24 : 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ============================================
-            // TOP ROW: ANALYTICS STATISTICS CARDS
-            // ============================================
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 800) {
-                  // Stack cards vertically on smaller screens
-                  return Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildAnalyticsCard(
-                              'TOTAL REQUEST',
-                              '187',
-                              '6.7% from last month',
-                              true,
-                              Colors.blue,
-                              Icons.inventory_2_outlined,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildAnalyticsCard(
-                              'OPEN ISSUE',
-                              '42',
-                              '8% from last week',
-                              false,
-                              Colors.yellow[700]!,
-                              Icons.layers_outlined,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildAnalyticsCard(
-                              'RESOLVED TODAY',
-                              '16',
-                              '24% from yesterday',
-                              true,
-                              Colors.green,
-                              Icons.check_circle_outline,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _buildAnalyticsCard(
-                              'RESOLUTION TIME',
-                              '2.4 days',
-                              '18% improvement',
-                              true,
-                              Colors.red,
-                              Icons.trending_up,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  );
-                } else {
-                  // Show all cards in a row on larger screens
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: _buildAnalyticsCard(
-                          'TOTAL REQUEST',
-                          '187',
-                          '6.7% from last month',
-                          true,
-                          Colors.blue,
-                          Icons.inventory_2_outlined,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildAnalyticsCard(
-                          'OPEN ISSUE',
-                          '42',
-                          '8% from last week',
-                          false,
-                          Colors.yellow[700]!,
-                          Icons.layers_outlined,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildAnalyticsCard(
-                          'RESOLVED TODAY',
-                          '16',
-                          '24% from yesterday',
-                          true,
-                          Colors.green,
-                          Icons.check_circle_outline,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildAnalyticsCard(
-                          'RESOLUTION TIME',
-                          '2.4 days',
-                          '18% improvement',
-                          true,
-                          Colors.red,
-                          Icons.trending_up,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 24),
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
+              ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.red,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _fetchAnalyticsData,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+              : SingleChildScrollView(
+                padding: EdgeInsets.all(isLargeScreen ? 24 : 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ============================================
+                    // TOP ROW: ANALYTICS STATISTICS CARDS
+                    // ============================================
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth < 800) {
+                          // Stack cards vertically on smaller screens
+                          return Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildAnalyticsCard(
+                                      'TOTAL REQUEST',
+                                      _totalRequests.toString(),
+                                      '6.7% from last month',
+                                      true,
+                                      Colors.blue,
+                                      Icons.inventory_2_outlined,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildAnalyticsCard(
+                                      'OPEN ISSUE',
+                                      _openIssues.toString(),
+                                      '8% from last week',
+                                      false,
+                                      Colors.yellow[700]!,
+                                      Icons.layers_outlined,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildAnalyticsCard(
+                                      'RESOLVED TODAY',
+                                      _resolvedToday.toString(),
+                                      '24% from yesterday',
+                                      true,
+                                      Colors.green,
+                                      Icons.check_circle_outline,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildAnalyticsCard(
+                                      'RESOLUTION TIME',
+                                      '${_resolutionTime.toStringAsFixed(1)} days',
+                                      '18% improvement',
+                                      true,
+                                      Colors.red,
+                                      Icons.trending_up,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          );
+                        } else {
+                          // Show all cards in a row on larger screens
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: _buildAnalyticsCard(
+                                  'TOTAL REQUEST',
+                                  _totalRequests.toString(),
+                                  '6.7% from last month',
+                                  true,
+                                  Colors.blue,
+                                  Icons.inventory_2_outlined,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildAnalyticsCard(
+                                  'OPEN ISSUE',
+                                  _openIssues.toString(),
+                                  '8% from last week',
+                                  false,
+                                  Colors.yellow[700]!,
+                                  Icons.layers_outlined,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildAnalyticsCard(
+                                  'RESOLVED TODAY',
+                                  _resolvedToday.toString(),
+                                  '24% from yesterday',
+                                  true,
+                                  Colors.green,
+                                  Icons.check_circle_outline,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _buildAnalyticsCard(
+                                  'RESOLUTION TIME',
+                                  '${_resolutionTime.toStringAsFixed(1)} days',
+                                  '18% improvement',
+                                  true,
+                                  Colors.red,
+                                  Icons.trending_up,
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
 
-            // ============================================
-            // FILTER CONTROLS ROW
-            // ============================================
-            _buildFilterControls(),
-            const SizedBox(height: 24),
+                    // ============================================
+                    // FILTER CONTROLS ROW
+                    // ============================================
+                    _buildFilterControls(),
+                    const SizedBox(height: 24),
 
-            // ============================================
-            // MIDDLE ROW: HEAT MAP + PIE CHART
-            // ============================================
-            LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth < 1000) {
-                  // Stack vertically on smaller screens
-                  return Column(
-                    children: [
-                      _buildBuildingHeatMap(),
-                      const SizedBox(height: 20),
-                      _buildTopIssueChart(),
-                    ],
-                  );
-                } else {
-                  // Side by side on larger screens
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: _buildBuildingHeatMap(),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        flex: 1,
-                        child: _buildTopIssueChart(),
-                      ),
-                    ],
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 24),
+                    // ============================================
+                    // MIDDLE ROW: HEAT MAP + PIE CHART
+                    // ============================================
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        if (constraints.maxWidth < 1000) {
+                          // Stack vertically on smaller screens
+                          return Column(
+                            children: [
+                              _buildBuildingHeatMap(),
+                              const SizedBox(height: 20),
+                              _buildTopIssueChart(),
+                            ],
+                          );
+                        } else {
+                          // Side by side on larger screens
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 2, child: _buildBuildingHeatMap()),
+                              const SizedBox(width: 20),
+                              Expanded(flex: 1, child: _buildTopIssueChart()),
+                            ],
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
 
-            // ============================================
-            // BOTTOM ROW: DOWNTIME TRACKING CHART
-            // ============================================
-            _buildDowntimeTrackingChart(),
-          ],
-        ),
-      ),
+                    // ============================================
+                    // BOTTOM ROW: DOWNTIME TRACKING CHART
+                    // ============================================
+                    _buildDowntimeTrackingChart(),
+                  ],
+                ),
+              ),
     );
   }
 
@@ -385,16 +498,12 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 18,
-                ),
+                child: Icon(icon, color: color, size: 18),
               ),
             ],
           ),
           const Spacer(),
-          
+
           // Main Value
           Text(
             value,
@@ -405,7 +514,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
             ),
           ),
           const SizedBox(height: 4),
-          
+
           // Bottom Row: Percentage and Subtitle
           Row(
             children: [
@@ -456,23 +565,29 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                 child: DropdownButton<String>(
                   isDense: true,
                   value: selectedDateRange,
-                  items: ['This Week', 'This Month', 'Last Month', 'Last 3 Months']
-                      .map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text('Date Range: $value'),
-                    );
-                  }).toList(),
+                  items:
+                      [
+                        'This Week',
+                        'This Month',
+                        'Last Month',
+                        'Last 3 Months',
+                      ].map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text('Date Range: $value'),
+                        );
+                      }).toList(),
                   onChanged: (String? newValue) {
                     setState(() {
                       selectedDateRange = newValue!;
                     });
+                    _fetchAnalyticsData();
                   },
                 ),
               ),
             ),
             const SizedBox(width: 16),
-            
+
             // Status Dropdown
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -483,53 +598,62 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                   isDense: true,
+                  isDense: true,
                   value: selectedStatus,
-                  items: ['All', 'Open', 'In Progress', 'Resolved', 'Closed']
-                      .map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text('Status: $value'),
-                    );
-                  }).toList(),
+                  items:
+                      ['All', 'Open', 'In Progress', 'Resolved', 'Closed'].map((
+                        String value,
+                      ) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text('Status: $value'),
+                        );
+                      }).toList(),
                   onChanged: (String? newValue) {
                     setState(() {
                       selectedStatus = newValue!;
                     });
+                    _fetchAnalyticsData();
                   },
                 ),
               ),
             ),
           ],
         ),
-        
+
         // Right side buttons
         Row(
           children: [
             // Refresh Button
             TextButton.icon(
               onPressed: () {
-                // TODO: Implement refresh functionality
+                _fetchAnalyticsData();
               },
               icon: const Icon(Icons.refresh, size: 18),
               label: const Text('Refresh'),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.blue,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Colors.blue),
             ),
             const SizedBox(width: 12),
-            
+
             // Export Button
             ElevatedButton.icon(
               onPressed: () {
                 // TODO: Implement export functionality
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Export functionality coming soon'),
+                  ),
+                );
               },
               icon: const Icon(Icons.file_download, size: 18),
               label: const Text('Export'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -545,6 +669,11 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   // BUILDING HEAT MAP WIDGET
   // ============================================
   Widget _buildBuildingHeatMap() {
+    final heatMapData =
+        _buildingHeatMap.isNotEmpty
+            ? _buildingHeatMap
+            : _getDefaultHeatMapData();
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -565,74 +694,72 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
           children: [
             const Text(
               'Building Heat Map',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 20),
-            
+
             // Heat Map Grid
             Column(
-              children: heatMapData.entries.map((floorEntry) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      // Floor Label
-                      SizedBox(
-                        width: 60,
-                        child: Text(
-                          floorEntry.key,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      
-                      // Room Units
-                      Expanded(
-                        child: Row(
-                          children: floorEntry.value.map((unit) {
-                            return Expanded(
-                              child: Container(
-                                margin: const EdgeInsets.only(right: 4),
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: unit.color,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    unit.unitNumber,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
+              children:
+                  heatMapData.entries.map((floorEntry) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          // Floor Label
+                          SizedBox(
+                            width: 60,
+                            child: Text(
+                              floorEntry.key,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
                               ),
-                            );
-                          }).toList(),
-                        ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+
+                          // Room Units
+                          Expanded(
+                            child: Row(
+                              children:
+                                  floorEntry.value.map((unit) {
+                                    return Expanded(
+                                      child: Container(
+                                        margin: const EdgeInsets.only(right: 4),
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: unit.color,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            unit.unitNumber,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                );
-              }).toList(),
+                    );
+                  }).toList(),
             ),
             const SizedBox(height: 20),
-            
+
             // Heat Map Legend
             const Text(
               'Showing repair request per unit',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 12),
             Row(
@@ -668,10 +795,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 12),
-        ),
+        Text(label, style: const TextStyle(fontSize: 12)),
       ],
     );
   }
@@ -680,6 +804,60 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
   // TOP ISSUE BY CATEGORY PIE CHART WIDGET
   // ============================================
   Widget _buildTopIssueChart() {
+    final categoryData =
+        _categoryData.isNotEmpty
+            ? _categoryData
+            : {
+              'HVAC': 28,
+              'Electrical': 15,
+              'Civil/Carpentry': 10,
+              'Plumbing': 10,
+              'Others': 10,
+            };
+
+    // Calculate total for percentages
+    final total = categoryData.values.fold<int>(0, (sum, count) => sum + count);
+
+    // Define colors for categories
+    final categoryColors = {
+      'HVAC': Colors.blue,
+      'hvac': Colors.blue,
+      'Electrical': Colors.orange,
+      'electrical': Colors.orange,
+      'Civil/Carpentry': Colors.red,
+      'carpentry': Colors.red,
+      'Plumbing': Colors.yellow,
+      'plumbing': Colors.yellow,
+      'Others': Colors.green,
+      'general': Colors.green,
+      'pest control': Colors.purple,
+      'masonry': Colors.brown,
+      'security': Colors.indigo,
+      'fire_safety': Colors.deepOrange,
+    };
+
+    // Create pie chart sections
+    final sections =
+        categoryData.entries.map((entry) {
+          final color =
+              categoryColors[entry.key] ??
+              categoryColors[entry.key.toLowerCase()] ??
+              Colors.grey;
+          final percentage = total > 0 ? (entry.value / total * 100) : 0;
+
+          return PieChartSectionData(
+            color: color,
+            value: entry.value.toDouble(),
+            title: percentage > 5 ? '${percentage.toStringAsFixed(0)}%' : '',
+            radius: 50,
+            titleStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          );
+        }).toList();
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -700,13 +878,10 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
           children: [
             const Text(
               'Top Issue by Category',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 24),
-            
+
             // Pie Chart
             SizedBox(
               height: 200,
@@ -714,43 +889,12 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                 PieChartData(
                   sectionsSpace: 4,
                   centerSpaceRadius: 60,
-                  sections: [
-                    PieChartSectionData(
-                      color: Colors.blue,
-                      value: 28,
-                      title: '',
-                      radius: 50,
-                    ),
-                    PieChartSectionData(
-                      color: Colors.orange,
-                      value: 15,
-                      title: '',
-                      radius: 50,
-                    ),
-                    PieChartSectionData(
-                      color: Colors.red,
-                      value: 10,
-                      title: '',
-                      radius: 50,
-                    ),
-                    PieChartSectionData(
-                      color: Colors.yellow,
-                      value: 10,
-                      title: '',
-                      radius: 50,
-                    ),
-                    PieChartSectionData(
-                      color: Colors.green,
-                      value: 10,
-                      title: '',
-                      radius: 50,
-                    ),
-                  ],
+                  sections: sections,
                 ),
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Chart Legend with Statistics
             const Text(
               'MOST PROBLEMATIC AREAS',
@@ -761,12 +905,19 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
               ),
             ),
             const SizedBox(height: 16),
-            
-            _buildCategoryItem('HVAC', '28 requests', Colors.blue),
-            _buildCategoryItem('Electrical', '15 requests', Colors.orange),
-            _buildCategoryItem('Civil/Carpentry', '10 requests', Colors.red),
-            _buildCategoryItem('Plumbing', '10 requests', Colors.yellow),
-            _buildCategoryItem('Others', '10 requests', Colors.green),
+
+            ...categoryData.entries.map((entry) {
+              final color =
+                  categoryColors[entry.key] ??
+                  categoryColors[entry.key.toLowerCase()] ??
+                  Colors.grey;
+              final displayName = entry.key.toUpperCase();
+              return _buildCategoryItem(
+                displayName,
+                '${entry.value} requests',
+                color,
+              );
+            }).toList(),
           ],
         ),
       ),
@@ -784,28 +935,16 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
           Container(
             width: 12,
             height: 12,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               category,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
             ),
           ),
-          Text(
-            count,
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 12,
-            ),
-          ),
+          Text(count, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
         ],
       ),
     );
@@ -839,13 +978,13 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
               children: [
                 const Text(
                   'Downtime Tracking',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.grey[100],
                     borderRadius: BorderRadius.circular(16),
@@ -853,16 +992,18 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: selectedDowntimeUnit,
-                      items: ['This Month', 'Last Month', 'Last 3 Months']
-                          .map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(
-                            value,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        );
-                      }).toList(),
+                      items:
+                          ['This Month', 'Last Month', 'Last 3 Months'].map((
+                            String value,
+                          ) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(
+                                value,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            );
+                          }).toList(),
                       onChanged: (String? newValue) {
                         setState(() {
                           selectedDowntimeUnit = newValue!;
@@ -874,7 +1015,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
               ],
             ),
             const SizedBox(height: 24),
-            
+
             // Area Chart
             SizedBox(
               height: 300,
@@ -885,10 +1026,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                     drawVerticalLine: false,
                     horizontalInterval: 1,
                     getDrawingHorizontalLine: (value) {
-                      return FlLine(
-                        color: Colors.grey[200]!,
-                        strokeWidth: 1,
-                      );
+                      return FlLine(color: Colors.grey[200]!, strokeWidth: 1);
                     },
                   ),
                   titlesData: FlTitlesData(
@@ -977,7 +1115,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                         color: Colors.green.withOpacity(0.1),
                       ),
                     ),
-                    
+
                     // Unit B - Blue line
                     LineChartBarData(
                       spots: const [
@@ -996,7 +1134,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
                         color: Colors.blue.withOpacity(0.1),
                       ),
                     ),
-                    
+
                     // Unit C - Red line
                     LineChartBarData(
                       spots: const [
@@ -1020,7 +1158,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Chart Legend
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -1056,10 +1194,7 @@ class _AdminWebAnalyticsPageState extends State<AdminWebAnalyticsPage> {
         const SizedBox(width: 8),
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
         ),
       ],
     );

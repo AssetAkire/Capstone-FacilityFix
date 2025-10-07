@@ -28,6 +28,8 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
   List<dynamic> _maintenanceTasks = [];
   Map<String, dynamic>? _workOrderTrends;
 
+  Map<String, String> _userIdToNameMap = {};
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +50,19 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
       } else {
         print('[v0] Warning: No auth token found in storage');
       }
+
+      final users = await _apiService.getUsers();
+      _userIdToNameMap = {};
+      for (var user in users) {
+        final userId = user['user_id'] ?? user['id'];
+        final firstName = user['first_name'] ?? '';
+        final lastName = user['last_name'] ?? '';
+        final fullName = '$firstName $lastName'.trim();
+        if (userId != null && fullName.isNotEmpty) {
+          _userIdToNameMap[userId] = fullName;
+        }
+      }
+      print('[v0] Loaded ${_userIdToNameMap.length} user names');
 
       // Fetch dashboard stats
       final stats = await _apiService.getDashboardStats();
@@ -524,6 +539,13 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
           final priority = slip['priority'] ?? 'medium';
           final status = slip['status'] ?? 'pending';
 
+          final assignedToId = slip['assigned_to'];
+          String displayName = 'Unassigned';
+          if (assignedToId != null && assignedToId.toString().isNotEmpty) {
+            displayName =
+                _userIdToNameMap[assignedToId] ?? assignedToId.toString();
+          }
+
           Color priorityColor;
           switch (priority.toLowerCase()) {
             case 'high':
@@ -553,7 +575,7 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
           return {
             'task': slip['description'] ?? 'No description',
             'priority': priority.toString().toUpperCase(),
-            'name': slip['assigned_to'] ?? 'Unassigned',
+            'name': displayName, // Use display name instead of ID
             'status': status.toString().replaceAll('_', ' ').toUpperCase(),
             'priorityColor': priorityColor,
             'statusColor': statusColor,
@@ -893,9 +915,16 @@ class _AdminWebDashPageState extends State<AdminWebDashPage> {
   Widget _buildMaintenanceSchedule() {
     final schedules =
         _maintenanceTasks.take(2).map((task) {
+          final assignedToId = task['assigned_to'];
+          String assigneeName = 'Unassigned';
+          if (assignedToId != null && assignedToId.toString().isNotEmpty) {
+            assigneeName =
+                _userIdToNameMap[assignedToId] ?? assignedToId.toString();
+          }
+
           return {
             'title': task['task_title'] ?? 'Maintenance Task',
-            'assignee': task['assigned_to'] ?? 'Unassigned',
+            'assignee': assigneeName, // Use display name instead of ID
             'date': task['scheduled_date'] ?? DateTime.now().toString(),
           };
         }).toList();

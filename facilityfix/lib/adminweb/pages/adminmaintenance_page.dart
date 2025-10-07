@@ -5,6 +5,8 @@ import '../popupwidgets/createmaintenancedialogue_popup.dart';
 import '../popupwidgets/maintenance_firesafety_popup.dart';
 import '../popupwidgets/maintenance_earthquake_popup.dart';
 import '../popupwidgets/maintenance_typhoonflood_popup.dart';
+import '../services/api_service.dart';
+import '../../services/auth_storage.dart';
 
 class AdminMaintenancePage extends StatefulWidget {
   const AdminMaintenancePage({super.key});
@@ -14,6 +16,69 @@ class AdminMaintenancePage extends StatefulWidget {
 }
 
 class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
+  final ApiService _apiService = ApiService();
+  List<Map<String, dynamic>> _tasks = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeAndFetchData();
+  }
+
+  Future<void> _initializeAndFetchData() async {
+    try {
+      // Get auth token from storage
+      final token = await AuthStorage.getToken();
+      if (token != null) {
+        _apiService.setAuthToken(token);
+      }
+
+      await _fetchMaintenanceTasks();
+    } catch (e) {
+      print('[v0] Error initializing: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to initialize: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchMaintenanceTasks() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      // TODO: Replace with actual building ID from user context
+      final response = await _apiService.getMaintenanceTasks(
+        buildingId: 'default_building_id',
+      );
+
+      if (response['success'] == true) {
+        final tasks = response['tasks'] as List<dynamic>;
+        setState(() {
+          _tasks = tasks.map((task) => task as Map<String, dynamic>).toList();
+          _isLoading = false;
+        });
+      } else {
+        throw Exception(response['error'] ?? 'Failed to load tasks');
+      }
+    } catch (e) {
+      print('[v0] Error fetching maintenance tasks: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load maintenance tasks: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   // Helper function to convert routeKey to actual route path
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -58,29 +123,6 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
-  // Sample data for the table
-  final List<Map<String, dynamic>> _tasks = [
-    {
-      'id': 'PM-GEN-LIGHT-001',
-      'location': 'Bldg A - Basement',
-      'task': 'Elevator Maintenance',
-      'status': 'In Progress',
-      'date': '05-21-2025',
-      'recurrence': '3 Months',
-      'maintenanceType': 'External',
-    },
-    {
-      'id': 'PM-GEN-LIGHT-002',
-      'location': 'UNIT 210',
-      'task': 'Light Inspection',
-      'status': 'New',
-      'date': '05-30-2025',
-      'recurrence': '1 Month',
-      'maintenanceType': 'Internal', 
-    },
-  ];
-
-
   final List<double> _colW = <double>[
     160, // ID
     180, // LOCATION
@@ -91,7 +133,11 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     48, // ACTION
   ];
 
-  Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
+  Widget _fixedCell(
+    int i,
+    Widget child, {
+    Alignment align = Alignment.centerLeft,
+  }) {
     return SizedBox(
       width: _colW[i],
       child: Align(alignment: align, child: child),
@@ -106,10 +152,15 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     style: style,
   );
 
-  // Action dropdown menu methods 
-  void _showActionMenu(BuildContext context, Map<String, dynamic> maintenance, Offset position) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    
+  // Action dropdown menu methods
+  void _showActionMenu(
+    BuildContext context,
+    Map<String, dynamic> maintenance,
+    Offset position,
+  ) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+
     showMenu(
       context: context,
       position: RelativeRect.fromRect(
@@ -129,10 +180,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
               const SizedBox(width: 12),
               Text(
                 'View',
-                style: TextStyle(
-                  color: Colors.green[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.green[600], fontSize: 14),
               ),
             ],
           ),
@@ -141,18 +189,11 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
           value: 'edit',
           child: Row(
             children: [
-              Icon(
-                Icons.edit_outlined,
-                color: Colors.blue[600],
-                size: 18,
-              ),
+              Icon(Icons.edit_outlined, color: Colors.blue[600], size: 18),
               const SizedBox(width: 12),
               Text(
                 'Edit',
-                style: TextStyle(
-                  color: Colors.blue[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.blue[600], fontSize: 14),
               ),
             ],
           ),
@@ -161,26 +202,17 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
           value: 'delete',
           child: Row(
             children: [
-              Icon(
-                Icons.delete_outline,
-                color: Colors.red[600],
-                size: 18,
-              ),
+              Icon(Icons.delete_outline, color: Colors.red[600], size: 18),
               const SizedBox(width: 12),
               Text(
                 'Delete',
-                style: TextStyle(
-                  color: Colors.red[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.red[600], fontSize: 14),
               ),
             ],
           ),
         ),
       ],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       elevation: 8,
     ).then((value) {
       if (value != null) {
@@ -189,7 +221,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     });
   }
 
-  // Handle action selection 
+  // Handle action selection
   void _handleActionSelection(String action, Map<String, dynamic> maintenance) {
     switch (action) {
       case 'view':
@@ -204,17 +236,21 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     }
   }
 
-  // View method 
+  // View method
   void _viewMaintenance(Map<String, dynamic> maintenance) {
-    final id = (maintenance['id'] ?? '').toString(); 
-    final rawType = (maintenance['maintenanceType'] ?? maintenance['type'] ?? '')
-        .toString()
-        .toLowerCase()
-        .trim();
+    final id = (maintenance['id'] ?? '').toString();
+    final rawType =
+        (maintenance['maintenanceType'] ??
+                maintenance['type'] ??
+                maintenance['maintenance_type'] ??
+                '')
+            .toString()
+            .toLowerCase()
+            .trim();
 
-    if (rawType.startsWith('internal')) {
+    if (rawType.contains('internal')) {
       context.push('/work/maintenance/$id/internal', extra: maintenance);
-    } else if (rawType.startsWith('external')) {
+    } else if (rawType.contains('external')) {
       context.push('/work/maintenance/$id/external', extra: maintenance);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -226,14 +262,18 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
   // Edit method
   void _editMaintenance(Map<String, dynamic> maintenance) {
     final id = (maintenance['id'] ?? '').toString();
-    final rawType = (maintenance['maintenanceType'] ?? maintenance['type'] ?? '')
-        .toString()
-        .toLowerCase()
-        .trim();
+    final rawType =
+        (maintenance['maintenanceType'] ??
+                maintenance['type'] ??
+                maintenance['maintenance_type'] ??
+                '')
+            .toString()
+            .toLowerCase()
+            .trim();
 
-    if (rawType.startsWith('internal')) {
+    if (rawType.contains('internal')) {
       context.push('/work/maintenance/$id/internal?edit=1', extra: maintenance);
-    } else if (rawType.startsWith('external')) {
+    } else if (rawType.contains('external')) {
       context.push('/work/maintenance/$id/external?edit=1', extra: maintenance);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -242,36 +282,48 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     }
   }
 
-  // Delete maintenance method
-  void _deleteMaintenance(Map<String, dynamic> maintenance) {
+  void _deleteMaintenance(Map<String, dynamic> maintenance) async {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Delete Maintenance'),
-          content: Text('Are you sure you want to delete maintenance ${maintenance['id']}?'),
+          content: Text(
+            'Are you sure you want to delete maintenance ${maintenance['id']}?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                // TODO: Replace with actual backend API call
-                setState(() {
-                  _tasks.removeWhere((n) => n['id'] == maintenance['id']);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Maintenance ${maintenance['id']} deleted'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+                try {
+                  await _apiService.deleteMaintenanceTask(maintenance['id']);
+                  await _fetchMaintenanceTasks(); // Refresh the list
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Maintenance ${maintenance['id']} deleted',
+                        ),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to delete: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Delete'),
             ),
           ],
@@ -279,7 +331,6 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
       },
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -325,7 +376,11 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                           ),
                           child: const Text('Dashboard'),
                         ),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Colors.grey,
+                          size: 16,
+                        ),
                         TextButton(
                           onPressed: () => context.go('/work/maintenance'),
                           style: TextButton.styleFrom(
@@ -334,7 +389,11 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                           ),
                           child: const Text('Work Orders'),
                         ),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Colors.grey,
+                          size: 16,
+                        ),
                         TextButton(
                           onPressed: null,
                           style: TextButton.styleFrom(
@@ -343,27 +402,35 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                           ),
                           child: const Text('Maintenance Tasks'),
                         ),
-                        
                       ],
                     ),
                   ],
                 ),
                 ElevatedButton.icon(
-                  onPressed: () => showCreateMaintenanceTaskDialog(context),
-                  icon: const Icon(Icons.add, size: 22), 
+                  onPressed:
+                      () => showCreateMaintenanceTaskDialog(
+                        context,
+                        onInternal:
+                            () =>
+                                context.go('/work/maintenance/create/internal'),
+                        onExternal:
+                            () =>
+                                context.go('/work/maintenance/create/external'),
+                      ),
+                  icon: const Icon(Icons.add, size: 22),
                   label: const Text(
                     "Create New",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16, 
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1976D2),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18), 
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 18,
+                    ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30), 
+                      borderRadius: BorderRadius.circular(30),
                     ),
                     elevation: 2, // slight shadow for emphasis
                   ),
@@ -381,7 +448,9 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                   "Next: July 2025",
                   Colors.white,
                   onTap: () {
-                    FireSafetyDialog.show(context, {"description": "Fire safety inspection"});
+                    FireSafetyDialog.show(context, {
+                      "description": "Fire safety inspection",
+                    });
                   },
                 ),
                 const SizedBox(width: 16),
@@ -405,7 +474,8 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                   Colors.white,
                   onTap: () {
                     TyphoonFloodDialog.show(context, {
-                      'description': 'Typhoon and flood safety inspection tasks for this facility',
+                      'description':
+                          'Typhoon and flood safety inspection tasks for this facility',
                       'priority': 'High',
                     });
                   },
@@ -413,7 +483,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                 const SizedBox(width: 16),
                 _buildSummaryCard(
                   "PENDING ITEMS",
-                  "8",
+                  "${_tasks.where((t) => t['status'] == 'pending' || t['status'] == 'scheduled').length}",
                   "Total Pending",
                   Colors.white,
                 ),
@@ -421,7 +491,6 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
             ),
             const SizedBox(height: 32),
 
-            // Table section
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -452,6 +521,12 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                         ),
                         Row(
                           children: [
+                            IconButton(
+                              onPressed: _fetchMaintenanceTasks,
+                              icon: const Icon(Icons.refresh),
+                              tooltip: 'Refresh',
+                            ),
+                            const SizedBox(width: 8),
                             Container(
                               width: 240,
                               height: 40,
@@ -482,7 +557,9 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                             const SizedBox(width: 12),
                             Container(
                               height: 40,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                               decoration: BoxDecoration(
                                 border: Border.all(color: Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(8),
@@ -512,75 +589,180 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                       ],
                     ),
                   ),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: Colors.grey[400],
-                  ),
+                  Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
-                  // Table content
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                            columnSpacing: 16,
-                            headingRowHeight: 56,
-                            dataRowHeight: 64,
-                            headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
-                            headingTextStyle: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[600],
-                              letterSpacing: 0.5,
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.all(40.0),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Text(
+                              'Error: $_error',
+                              style: const TextStyle(color: Colors.red),
+                              textAlign: TextAlign.center,
                             ),
-                            dataTextStyle: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _fetchMaintenanceTasks,
+                              child: const Text('Retry'),
                             ),
-                            columns: [
-                              DataColumn(label: _fixedCell(0, const Text("ID"))),
-                              DataColumn(label: _fixedCell(1, const Text("LOCATION"))),
-                              DataColumn(label: _fixedCell(2, const Text("TASK TITLE"))),
-                              DataColumn(label: _fixedCell(3, const Text("STATUS"))),
-                              DataColumn(label: _fixedCell(4, const Text("DATE"))),
-                              DataColumn(label: _fixedCell(5, const Text("RECURRENCE"))),
-                              DataColumn(label: _fixedCell(6, const Text(""))),
-                            ],
-                            rows: _tasks.map((task) {
+                          ],
+                        ),
+                      ),
+                    )
+                  else if (_tasks.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Center(
+                        child: Text(
+                          'No maintenance tasks found',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  else
+                    // Table content
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        columnSpacing: 16,
+                        headingRowHeight: 56,
+                        dataRowHeight: 64,
+                        headingRowColor: MaterialStateProperty.all(
+                          Colors.grey[50],
+                        ),
+                        headingTextStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                        dataTextStyle: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                        columns: [
+                          DataColumn(label: _fixedCell(0, const Text("ID"))),
+                          DataColumn(
+                            label: _fixedCell(1, const Text("LOCATION")),
+                          ),
+                          DataColumn(
+                            label: _fixedCell(2, const Text("TASK TITLE")),
+                          ),
+                          DataColumn(
+                            label: _fixedCell(3, const Text("STATUS")),
+                          ),
+                          DataColumn(label: _fixedCell(4, const Text("DATE"))),
+                          DataColumn(
+                            label: _fixedCell(5, const Text("RECURRENCE")),
+                          ),
+                          DataColumn(label: _fixedCell(6, const Text(""))),
+                        ],
+                        rows:
+                            _tasks.map((task) {
                               return DataRow(
                                 cells: [
-                                  DataCell(_fixedCell(0, _ellipsis(
-                                    task['id'],
-                                    style: TextStyle(color: Colors.grey[700], fontSize: 13),
-                                  ))),
-                                  DataCell(_fixedCell(1, _ellipsis(task['location']))),
-                                  DataCell(_fixedCell(2, _ellipsis(task['task']))),
-                                  DataCell(_fixedCell(3, _buildStatusChip(task['status']))),
-                                  DataCell(_fixedCell(4, _ellipsis(task['date']))),
-                                  DataCell(_fixedCell(5, _ellipsis(task['recurrence']))),
-                                  DataCell(_fixedCell(6, 
-                                    Builder(builder: (context) {
-                                      return IconButton(
-                                        onPressed: () {
-                                          final rbx = context.findRenderObject() as RenderBox;
-                                          final position = rbx.localToGlobal(Offset.zero);
-                                          _showActionMenu(context, task, position);
+                                  DataCell(
+                                    _fixedCell(
+                                      0,
+                                      _ellipsis(
+                                        task['id'] ??
+                                            task['task_code'] ??
+                                            'N/A',
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      1,
+                                      _ellipsis(task['location'] ?? 'N/A'),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      2,
+                                      _ellipsis(
+                                        task['task_title'] ??
+                                            task['taskTitle'] ??
+                                            'N/A',
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      3,
+                                      _buildStatusChip(
+                                        task['status'] ?? 'scheduled',
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      4,
+                                      _ellipsis(
+                                        _formatDate(
+                                          task['scheduled_date'] ??
+                                              task['startDate'],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      5,
+                                      _ellipsis(
+                                        task['recurrence'] ??
+                                            task['recurrence_pattern'] ??
+                                            'N/A',
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      6,
+                                      Builder(
+                                        builder: (context) {
+                                          return IconButton(
+                                            onPressed: () {
+                                              final rbx =
+                                                  context.findRenderObject()
+                                                      as RenderBox;
+                                              final position = rbx
+                                                  .localToGlobal(Offset.zero);
+                                              _showActionMenu(
+                                                context,
+                                                task,
+                                                position,
+                                              );
+                                            },
+                                            icon: Icon(
+                                              Icons.more_vert,
+                                              color: Colors.grey[400],
+                                              size: 20,
+                                            ),
+                                          );
                                         },
-                                        icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
-                                      );
-                                    }),
-                                    align: Alignment.center,
-                                  )),
+                                      ),
+                                      align: Alignment.center,
+                                    ),
+                                  ),
                                 ],
                               );
                             }).toList(),
-                          ),
                       ),
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: Colors.grey[400],
-                      ),
-                    
+                    ),
+                  Divider(height: 1, thickness: 1, color: Colors.grey[400]),
+
                   // Pagination
                   Padding(
                     padding: const EdgeInsets.all(20.0),
@@ -588,7 +770,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to 2 of 2 entries",
+                          "Showing 1 to ${_tasks.length} of ${_tasks.length} entries",
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 14,
@@ -661,6 +843,19 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
+  String _formatDate(dynamic date) {
+    if (date == null) return 'N/A';
+    try {
+      if (date is String) {
+        final dt = DateTime.parse(date);
+        return '${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}-${dt.year}';
+      }
+      return date.toString();
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
   // Widget for summary cards
   Widget _buildSummaryCard(
     String title,
@@ -704,10 +899,7 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
               ),
             ],
           ),
@@ -716,24 +908,27 @@ class _AdminMaintenancePageState extends State<AdminMaintenancePage> {
     );
   }
 
-
   // Widget for status chips
   Widget _buildStatusChip(String status) {
     Color bgColor;
     Color textColor;
-    switch (status) {
-      case 'In Progress':
-        bgColor = const Color(0xFFFFEBEE);
-        textColor = const Color(0xFFD32F2F);
-        break;
-      case 'New':
-        bgColor = const Color(0xFFE3F2FD);
-        textColor = const Color(0xFF1976D2);
-        break;
-      default:
-        bgColor = Colors.grey[100]!;
-        textColor = Colors.grey[700]!;
+    final statusLower = status.toLowerCase();
+
+    if (statusLower.contains('progress')) {
+      bgColor = const Color(0xFFFFEBEE);
+      textColor = const Color(0xFFD32F2F);
+    } else if (statusLower.contains('new') ||
+        statusLower.contains('scheduled')) {
+      bgColor = const Color(0xFFE3F2FD);
+      textColor = const Color(0xFF1976D2);
+    } else if (statusLower.contains('completed')) {
+      bgColor = const Color(0xFFE8F5E9);
+      textColor = const Color(0xFF388E3C);
+    } else {
+      bgColor = Colors.grey[100]!;
+      textColor = Colors.grey[700]!;
     }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(

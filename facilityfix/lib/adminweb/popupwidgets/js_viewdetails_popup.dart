@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class JobServiceConcernSlipDialog extends StatelessWidget {
   final Map<String, dynamic> task;
@@ -385,7 +386,7 @@ class JobServiceConcernSlipDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        '$priority Priority',
+        '${priority} Priority',
         style: TextStyle(
           color: textColor,
           fontSize: 12,
@@ -767,7 +768,7 @@ class JobServiceScheduleDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        '$urgency Urgency',
+        '${urgency} Urgency',
         style: TextStyle(
           color: textColor,
           fontSize: 12,

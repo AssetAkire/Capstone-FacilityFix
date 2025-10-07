@@ -14,13 +14,14 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
   // Current date and calendar navigation
   final DateTime _currentDate = DateTime.now();
   DateTime _selectedMonth = DateTime.now();
-  
+
   // Sample task data - in real app, this would come from your database
   final List<Map<String, dynamic>> _tasks = [
     {
       'id': 'PM-GEN-AC-001',
       'title': 'Routine Air Conditioning',
-      'description': 'Regular maintenance of the main boiler system. Check pressure levels, clean filters, and inspect all connections and valves for leaks.',
+      'description':
+          'Regular maintenance of the main boiler system. Check pressure levels, clean filters, and inspect all connections and valves for leaks.',
       'assignedTo': 'Kevin Gilbert',
       'date': DateTime(2025, 6, 28), // June 28, 2025
       'type': 'maintenance', // maintenance or repair
@@ -103,34 +104,44 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
     );
   }
 
-    //month jump dropdown
-    Widget _monthDropdown() {
+  //month jump dropdown
+  Widget _monthDropdown() {
     return PopupMenuButton<int>(
       tooltip: 'Select month',
       position: PopupMenuPosition.under,
       onSelected: (m) {
         setState(() {
-          _selectedMonth = DateTime(_selectedMonth.year, m, 1); // jump same year
+          _selectedMonth = DateTime(
+            _selectedMonth.year,
+            m,
+            1,
+          ); // jump same year
         });
       },
-      itemBuilder: (ctx) => [
-        for (int i = 1; i <= 12; i++)
-          PopupMenuItem<int>(
-            value: i,
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  child: i == _selectedMonth.month
-                      ? const Icon(Icons.check, size: 16, color: Colors.blue)
-                      : const SizedBox.shrink(),
+      itemBuilder:
+          (ctx) => [
+            for (int i = 1; i <= 12; i++)
+              PopupMenuItem<int>(
+                value: i,
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      child:
+                          i == _selectedMonth.month
+                              ? const Icon(
+                                Icons.check,
+                                size: 16,
+                                color: Colors.blue,
+                              )
+                              : const SizedBox.shrink(),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(_getMonthName(i)), // reuse function
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(_getMonthName(i)), // reuse function
-              ],
-            ),
-          ),
-      ],
+              ),
+          ],
       // the clickable chip
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -139,13 +150,15 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
-        children: [
-          const Text('Month',  //stays "Month" always
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-          const SizedBox(width: 8),
-          Icon(Icons.keyboard_arrow_down, color: Colors.grey[600], size: 18),
-        ],
-      ),
+          children: [
+            const Text(
+              'Month', //stays "Month" always
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.keyboard_arrow_down, color: Colors.grey[600], size: 18),
+          ],
+        ),
       ),
     );
   }
@@ -158,7 +171,9 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
       context: context,
       builder: (ctx) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Container(
             width: 520,
             padding: const EdgeInsets.all(20),
@@ -172,11 +187,18 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.calendar_today_outlined, size: 18, color: Colors.black54),
+                        const Icon(
+                          Icons.calendar_today_outlined,
+                          size: 18,
+                          color: Colors.black54,
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           '${_getMonthName(date.month)} ${date.day}, ${date.year}',
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ],
                     ),
@@ -198,8 +220,13 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1976D2),
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         elevation: 0,
                       ),
                     ),
@@ -225,54 +252,78 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                       children: [
                         Icon(Icons.inbox_outlined, color: Colors.grey[500]),
                         const SizedBox(width: 12),
-                        Text('No tasks for this date', style: TextStyle(color: Colors.grey[600])),
+                        Text(
+                          'No tasks for this date',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
                       ],
                     ),
                   )
                 else
-                  ...tasks.map((task) => InkWell(
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      _showTaskDetails(task);
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: _getTaskColor(task['type']).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _getTaskColor(task['type']).withOpacity(0.25)),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 4, height: 40,
-                            decoration: BoxDecoration(
-                              color: _getTaskColor(task['type']),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
+                  ...tasks.map(
+                    (task) => InkWell(
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        _showTaskDetails(task);
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: _getTaskColor(task['type']).withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _getTaskColor(
+                              task['type'],
+                            ).withOpacity(0.25),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(task['title'],
-                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 2),
-                                Text(task['assignedTo'],
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                              ],
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 4,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: _getTaskColor(task['type']),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(Icons.chevron_right, color: Colors.grey[500], size: 18),
-                        ],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    task['title'],
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    task['assignedTo'],
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.chevron_right,
+                              color: Colors.grey[500],
+                              size: 18,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  )),
+                  ),
               ],
             ),
           ),
@@ -281,14 +332,13 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
     );
   }
 
-
   // Get tasks for a specific date
   List<Map<String, dynamic>> _getTasksForDate(DateTime date) {
     return _tasks.where((task) {
       DateTime taskDate = task['date'] as DateTime;
       return taskDate.year == date.year &&
-             taskDate.month == date.month &&
-             taskDate.day == date.day;
+          taskDate.month == date.month &&
+          taskDate.day == date.day;
     }).toList();
   }
 
@@ -344,7 +394,10 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: _getTaskColor(task['type']),
                         borderRadius: BorderRadius.circular(12),
@@ -385,16 +438,17 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Priority indicator
                 Row(
                   children: [
                     Icon(
                       Icons.circle,
-                      color: task['priority'] == 'high' 
-                          ? Colors.red 
-                          : task['priority'] == 'medium' 
-                              ? Colors.orange 
+                      color:
+                          task['priority'] == 'high'
+                              ? Colors.red
+                              : task['priority'] == 'medium'
+                              ? Colors.orange
                               : Colors.green,
                       size: 12,
                     ),
@@ -404,17 +458,18 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: task['priority'] == 'high' 
-                            ? Colors.red 
-                            : task['priority'] == 'medium' 
-                                ? Colors.orange 
+                        color:
+                            task['priority'] == 'high'
+                                ? Colors.red
+                                : task['priority'] == 'medium'
+                                ? Colors.orange
                                 : Colors.green,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Task title
                 Text(
                   task['title'],
@@ -425,11 +480,15 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Assigned person
                 Row(
                   children: [
-                    const Icon(Icons.person_outline, size: 20, color: Colors.grey),
+                    const Icon(
+                      Icons.person_outline,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       task['assignedTo'],
@@ -441,11 +500,15 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Date
                 Row(
                   children: [
-                    const Icon(Icons.schedule_outlined, size: 20, color: Colors.grey),
+                    const Icon(
+                      Icons.schedule_outlined,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       _formatDate(task['date']),
@@ -457,11 +520,15 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Description
                 Row(
                   children: [
-                    const Icon(Icons.description_outlined, size: 20, color: Colors.grey),
+                    const Icon(
+                      Icons.description_outlined,
+                      size: 20,
+                      color: Colors.grey,
+                    ),
                     const SizedBox(width: 8),
                     const Text(
                       'Description',
@@ -507,8 +574,18 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
   // Get month name
   String _getMonthName(int month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return months[month - 1];
   }
@@ -517,17 +594,16 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
   Widget _buildDayCell(DateTime date, bool isCurrentMonth) {
     final tasks = _getTasksForDate(date);
     final hasMultipleTasks = tasks.length > 1;
-    final isToday = date.year == _currentDate.year &&
-                   date.month == _currentDate.month &&
-                   date.day == _currentDate.day;
+    final isToday =
+        date.year == _currentDate.year &&
+        date.month == _currentDate.month &&
+        date.day == _currentDate.day;
 
     return GestureDetector(
       onTap: () => _openDayDialog(date),
       child: Container(
         height: 120,
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[200]!),
-        ),
+        decoration: BoxDecoration(border: Border.all(color: Colors.grey[200]!)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -539,13 +615,14 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                  color: isCurrentMonth 
-                      ? (isToday ? Colors.blue : Colors.black87)
-                      : Colors.grey[400],
+                  color:
+                      isCurrentMonth
+                          ? (isToday ? Colors.blue : Colors.black87)
+                          : Colors.grey[400],
                 ),
               ),
             ),
-            
+
             // Task items
             Expanded(
               child: Padding(
@@ -555,27 +632,38 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                     // Show first task
                     if (tasks.isNotEmpty)
                       Builder(
-                        builder: (chipCtx) => GestureDetector(
-                          onTap: () => _showTaskPopoverFromContext(tasks[0], chipCtx),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            margin: const EdgeInsets.only(bottom: 2),
-                            decoration: BoxDecoration(
-                              color: _getTaskColor(tasks[0]['type']),
-                              borderRadius: BorderRadius.circular(4),
+                        builder:
+                            (chipCtx) => GestureDetector(
+                              onTap:
+                                  () => _showTaskPopoverFromContext(
+                                    tasks[0],
+                                    chipCtx,
+                                  ),
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                margin: const EdgeInsets.only(bottom: 2),
+                                decoration: BoxDecoration(
+                                  color: _getTaskColor(tasks[0]['type']),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  tasks[0]['title'],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ),
-                            child: Text(
-                              tasks[0]['title'],
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w500),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
                       ),
 
-                    
                     // Show "X+ More" if there are multiple tasks
                     if (hasMultipleTasks)
                       GestureDetector(
@@ -585,7 +673,10 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                         },
                         child: Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
                           child: Text(
                             '${tasks.length - 1}+ More',
                             style: TextStyle(
@@ -612,7 +703,9 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
       context: context,
       builder: (ctx) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           child: Container(
             width: 400,
             padding: const EdgeInsets.all(24),
@@ -626,7 +719,10 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                   children: [
                     Text(
                       'Tasks for ${_getMonthName(date.month)} ${date.day}',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(ctx).pop(),
@@ -639,61 +735,76 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                 // Task list (each item opens popover anchored to its tile)
                 ...tasks.map<Widget>((task) {
                   return Builder(
-                    builder: (tileCtx) => InkWell(
-                      onTap: () {
-                        // Capture the tile's screen rect BEFORE closing the dialog
-                        final rect = _rectFromContext(tileCtx);
-                        Navigator.of(ctx).pop(); // close list dialog
+                    builder:
+                        (tileCtx) => InkWell(
+                          onTap: () {
+                            // Capture the tile's screen rect BEFORE closing the dialog
+                            final rect = _rectFromContext(tileCtx);
+                            Navigator.of(ctx).pop(); // close list dialog
 
-                        // Show the anchored popover on the base route
-                        Future.microtask(() => _showTaskPopoverAt(task, rect));
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: _getTaskColor(task['type']).withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: _getTaskColor(task['type']).withOpacity(0.30),
+                            // Show the anchored popover on the base route
+                            Future.microtask(
+                              () => _showTaskPopoverAt(task, rect),
+                            );
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: _getTaskColor(
+                                task['type'],
+                              ).withOpacity(0.10),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _getTaskColor(
+                                  task['type'],
+                                ).withOpacity(0.30),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: _getTaskColor(task['type']),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        task['title'],
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        task['assignedTo'],
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 18,
+                                  color: Colors.grey[500],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 4,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: _getTaskColor(task['type']),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    task['title'],
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  Text(
-                                    task['assignedTo'],
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Icon(Icons.chevron_right, size: 18, color: Colors.grey[500]),
-                          ],
-                        ),
-                      ),
-                    ),
                   );
                 }),
               ],
@@ -703,7 +814,8 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
       },
     );
   }
-  //  Popover helpers 
+
+  //  Popover helpers
   // Get a screen-space rect for any widget context
   Rect _rectFromContext(BuildContext ctx) {
     final box = ctx.findRenderObject() as RenderBox;
@@ -714,9 +826,12 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
   // Map priority -> color
   Color _priorityColor(String? p) {
     switch (p) {
-      case 'high':   return Colors.red;
-      case 'medium': return Colors.orange;
-      default:       return Colors.green;
+      case 'high':
+        return Colors.red;
+      case 'medium':
+        return Colors.orange;
+      default:
+        return Colors.green;
     }
   }
 
@@ -726,8 +841,12 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        width: 36, height: 36,
-        decoration: BoxDecoration(color: Colors.grey[100], shape: BoxShape.circle),
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          shape: BoxShape.circle,
+        ),
         child: Icon(icon, size: 18, color: Colors.black87),
       ),
     );
@@ -736,15 +855,17 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
   // Show the task popover anchored to an on-screen rect
   void _showTaskPopoverAt(Map<String, dynamic> task, Rect anchor) {
     final overlay = Overlay.of(context);
-    final screen  = MediaQuery.of(context).size;
+    final screen = MediaQuery.of(context).size;
 
     const double popW = 520;
     const double margin = 16;
 
     // Prefer below the anchor; if not enough space, show above.
     double left = anchor.left;
-    double top  = anchor.bottom + 8;
-    if (left + popW > screen.width - margin) left = screen.width - popW - margin;
+    double top = anchor.bottom + 8;
+    if (left + popW > screen.width - margin) {
+      left = screen.width - popW - margin;
+    }
     // estimated height; if it overflows, flip above
     const double estH = 320;
     if (top + estH > screen.height - margin) {
@@ -754,134 +875,176 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
 
     OverlayEntry? entry;
     entry = OverlayEntry(
-      builder: (_) => Stack(
-        children: [
-          // tap outside to dismiss
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: () => entry?.remove(),
-              child: Container(color: Colors.transparent),
-            ),
-          ),
-
-          // the popover card
-          Positioned(
-            left: left, top: top, width: popW,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 24,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header: edit & more on the LEFT, close on the RIGHT 
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            _circleIconButton(Icons.edit_outlined, () {
-                              // TODO: hook up edit
-                              entry?.remove();
-                            }),
-                            const SizedBox(width: 8),
-                            _circleIconButton(Icons.more_horiz, () {
-                              // TODO: more actions
-                            }),
-                          ],
-                        ),
-                        _circleIconButton(Icons.close, () => entry?.remove()),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Priority line
-                    Row(
-                      children: [
-                        Icon(Icons.circle, size: 10, color: _priorityColor(task['priority'] as String?)),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${(task['priority'] as String?)?.toUpperCase() ?? 'LOW'} Priority',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: _priorityColor(task['priority'] as String?),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Title 
-                    Text(
-                      task['title'] ?? '',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Assigned
-                    Row(
-                      children: [
-                        const Icon(Icons.person_outline, size: 20, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Text(task['assignedTo'] ?? '', style: const TextStyle(fontSize: 14)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Date
-                    Row(
-                      children: [
-                        const Icon(Icons.schedule_outlined, size: 20, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Text(_formatDate(task['date'] as DateTime), style: const TextStyle(fontSize: 14)),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Description
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.description_outlined, size: 20, color: Colors.grey),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            task['description'] ?? '',
-                            style: const TextStyle(fontSize: 14, height: 1.5),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+      builder:
+          (_) => Stack(
+            children: [
+              // tap outside to dismiss
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => entry?.remove(),
+                  child: Container(color: Colors.transparent),
                 ),
               ),
-            ),
+
+              // the popover card
+              Positioned(
+                left: left,
+                top: top,
+                width: popW,
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.12),
+                          blurRadius: 24,
+                          offset: const Offset(0, 12),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Header: edit & more on the LEFT, close on the RIGHT
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                _circleIconButton(Icons.edit_outlined, () {
+                                  // TODO: hook up edit
+                                  entry?.remove();
+                                }),
+                                const SizedBox(width: 8),
+                                _circleIconButton(Icons.more_horiz, () {
+                                  // TODO: more actions
+                                }),
+                              ],
+                            ),
+                            _circleIconButton(
+                              Icons.close,
+                              () => entry?.remove(),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Priority line
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.circle,
+                              size: 10,
+                              color: _priorityColor(
+                                task['priority'] as String?,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${(task['priority'] as String?)?.toUpperCase() ?? 'LOW'} Priority',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: _priorityColor(
+                                  task['priority'] as String?,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        // Title
+                        Text(
+                          task['title'] ?? '',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Assigned
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.person_outline,
+                              size: 20,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              task['assignedTo'] ?? '',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Date
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.schedule_outlined,
+                              size: 20,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _formatDate(task['date'] as DateTime),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Description
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.description_outlined,
+                              size: 20,
+                              color: Colors.grey,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                task['description'] ?? '',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
 
     overlay.insert(entry);
   }
 
   // Convenience: compute rect from a widget context and show popover
-  void _showTaskPopoverFromContext(Map<String, dynamic> task, BuildContext anchorCtx) {
+  void _showTaskPopoverFromContext(
+    Map<String, dynamic> task,
+    BuildContext anchorCtx,
+  ) {
     final rect = _rectFromContext(anchorCtx);
     _showTaskPopoverAt(task, rect);
   }
@@ -918,12 +1081,23 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Text("Main", style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-                    Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey[600]),
+                    Text(
+                      "Main",
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 12,
+                      color: Colors.grey[600],
+                    ),
                     const SizedBox(width: 4),
                     const Text(
                       "Calendar",
-                      style: TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
@@ -934,7 +1108,6 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
 
             // ----- Calendar container -----
             Container(
-              height: 700, // fixed 
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
@@ -946,80 +1119,100 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
                   ),
                 ],
               ),
-              child: Column(
-                children: [
-                  // Header row (arrows, month label, dropdown)
-                  Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: _previousMonth,
-                              icon: const Icon(Icons.chevron_left),
-                              style: IconButton.styleFrom(backgroundColor: Colors.grey[100]),
-                            ),
-                            const SizedBox(width: 16),
-                            Text(
-                              '${_getMonthName(_selectedMonth.month)} ${_selectedMonth.year}',
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
+              child: SizedBox(
+                height: 700, // Moved height constraint here
+                child: Column(
+                  children: [
+                    // Header row (arrows, month label, dropdown)
+                    Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              IconButton(
+                                onPressed: _previousMonth,
+                                icon: const Icon(Icons.chevron_left),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.grey[100],
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Text(
+                                '${_getMonthName(_selectedMonth.month)} ${_selectedMonth.year}',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              IconButton(
+                                onPressed: _nextMonth,
+                                icon: const Icon(Icons.chevron_right),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.grey[100],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // keep your simple months dropdown button here
+                          _monthDropdown(),
+                        ],
+                      ),
+                    ),
+
+                    // Day headers + grid
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: Colors.grey[50],
+                              border: Border.symmetric(
+                                horizontal: BorderSide(
+                                  color: Colors.grey[200]!,
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            IconButton(
-                              onPressed: _nextMonth,
-                              icon: const Icon(Icons.chevron_right),
-                              style: IconButton.styleFrom(backgroundColor: Colors.grey[100]),
-                            ),
-                          ],
-                        ),
-
-                        // keep your simple months dropdown button here
-                        _monthDropdown(), 
-                      ],
-                    ),
-                  ),
-
-                  // Day headers + grid
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Container(
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            border: Border.symmetric(
-                              horizontal: BorderSide(color: Colors.grey[200]!),
-                            ),
-                          ),
-                          child: Row(
-                            children: ['SUN', 'MON', 'TUES', 'WED', 'THURS', 'FRI', 'SAT']
-                                .map((day) => Expanded(
-                                      child: Center(
-                                        child: Text(
-                                          day,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.grey[600],
-                                            letterSpacing: 0.5,
+                            child: Row(
+                              children:
+                                  [
+                                        'SUN',
+                                        'MON',
+                                        'TUES',
+                                        'WED',
+                                        'THURS',
+                                        'FRI',
+                                        'SAT',
+                                      ]
+                                      .map(
+                                        (day) => Expanded(
+                                          child: Center(
+                                            child: Text(
+                                              day,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.grey[600],
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ))
-                                .toList(),
+                                      )
+                                      .toList(),
+                            ),
                           ),
-                        ),
-                        Expanded(child: _buildCalendarGrid()),
-                      ],
+                          Expanded(child: _buildCalendarGrid()),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -1030,45 +1223,58 @@ class _AdminWebCalendarPageState extends State<AdminWebCalendarPage> {
 
   // Build the calendar grid with dates
   Widget _buildCalendarGrid() {
-    final firstDayOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
-    final lastDayOfMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0);
+    final firstDayOfMonth = DateTime(
+      _selectedMonth.year,
+      _selectedMonth.month,
+      1,
+    );
+    final lastDayOfMonth = DateTime(
+      _selectedMonth.year,
+      _selectedMonth.month + 1,
+      0,
+    );
     final firstDayOfWeek = firstDayOfMonth.weekday % 7; // Sunday = 0
-    
+
     final List<Widget> dayWidgets = [];
-    
+
     // Add empty cells for days before the first day of the month
     for (int i = 0; i < firstDayOfWeek; i++) {
       final date = firstDayOfMonth.subtract(Duration(days: firstDayOfWeek - i));
       dayWidgets.add(_buildDayCell(date, false));
     }
-    
+
     // Add cells for each day of the month
     for (int day = 1; day <= lastDayOfMonth.day; day++) {
       final date = DateTime(_selectedMonth.year, _selectedMonth.month, day);
       dayWidgets.add(_buildDayCell(date, true));
     }
-    
+
     // Add empty cells to complete the grid (if needed)
     while (dayWidgets.length % 7 != 0) {
-      final date = lastDayOfMonth.add(Duration(days: dayWidgets.length - (firstDayOfWeek + lastDayOfMonth.day) + 1));
+      final date = lastDayOfMonth.add(
+        Duration(
+          days: dayWidgets.length - (firstDayOfWeek + lastDayOfMonth.day) + 1,
+        ),
+      );
       dayWidgets.add(_buildDayCell(date, false));
     }
-    
+
     // Create rows of 7 days each
     final List<Widget> rows = [];
     for (int i = 0; i < dayWidgets.length; i += 7) {
       rows.add(
         Expanded(
           child: Row(
-            children: dayWidgets
-                .sublist(i, i + 7)
-                .map((widget) => Expanded(child: widget))
-                .toList(),
+            children:
+                dayWidgets
+                    .sublist(i, i + 7)
+                    .map((widget) => Expanded(child: widget))
+                    .toList(),
           ),
         ),
       );
     }
-    
+
     return Column(children: rows);
   }
 }

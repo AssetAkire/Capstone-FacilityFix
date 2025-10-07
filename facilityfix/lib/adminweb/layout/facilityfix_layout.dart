@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../popupwidgets/webnotification_popup.dart';
+import '../services/api_service.dart';
 
 class FacilityFixLayout extends StatefulWidget {
   final Widget body;
@@ -20,17 +22,21 @@ class FacilityFixLayout extends StatefulWidget {
 
 class _FacilityFixLayoutState extends State<FacilityFixLayout> {
   // Dropdown expansion state management
-  final Map<String, bool> _expanded = {
+  Map<String, bool> _expanded = {
     'user': false,
     'work': false,
     'inventory': false,
   };
 
   // Track hover states for navigation items
-  final Map<String, bool> _hovered = {};
+  Map<String, bool> _hovered = {};
 
   // Debug logging toggle for highlight component
   final bool _enableHighlightLogs = true;
+
+  List<Map<String, dynamic>> _notifications = [];
+  int _unreadCount = 0;
+  bool _isLoadingNotifications = false;
 
   void _logHighlight(String message) {
     if (!_enableHighlightLogs) return;
@@ -42,7 +48,10 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
     super.initState();
     // Auto-expand sections if current route is a child
     _autoExpandForCurrentRoute();
-    _logHighlight('initState -> currentRoute=${widget.currentRoute}, expanded=$_expanded');
+    _logHighlight(
+      'initState -> currentRoute=${widget.currentRoute}, expanded=$_expanded',
+    );
+    _initializeAuth();
   }
 
   // Automatically expand parent dropdown if child route is active
@@ -66,11 +75,74 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
     }
   }
 
+  Future<void> _initializeAuth() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final token = await user.getIdToken();
+        if (token != null) {
+          ApiService().setAuthToken(token);
+          await _fetchNotifications();
+        }
+      }
+    } catch (e) {
+      print('[v0] Error initializing auth: $e');
+    }
+  }
+
+  Future<void> _fetchNotifications() async {
+    if (_isLoadingNotifications) return;
+
+    setState(() {
+      _isLoadingNotifications = true;
+    });
+
+    try {
+      final response = await ApiService().getNotifications();
+
+      // Extract the notifications list from the response
+      final notificationsList = response['notifications'] as List? ?? [];
+
+      // Transform backend data to match popup format
+      final transformedNotifications =
+          notificationsList.map((notif) {
+            return {
+              'id': notif['id'],
+              'type': notif['notification_type'] ?? 'system',
+              'title': notif['title'] ?? 'Notification',
+              'message': notif['message'] ?? '',
+              'timestamp':
+                  notif['created_at'] ?? DateTime.now().toIso8601String(),
+              'isRead': notif['is_read'] ?? false,
+              'relatedId': notif['related_id'],
+            };
+          }).toList();
+
+      setState(() {
+        _notifications = transformedNotifications;
+        _unreadCount =
+            transformedNotifications.where((n) => n['isRead'] == false).length;
+        _isLoadingNotifications = false;
+      });
+
+      print(
+        '[v0] Loaded ${_notifications.length} notifications, $_unreadCount unread',
+      );
+    } catch (e) {
+      print('[v0] Error fetching notifications: $e');
+      setState(() {
+        _isLoadingNotifications = false;
+      });
+    }
+  }
+
   @override
   void didUpdateWidget(covariant FacilityFixLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.currentRoute != oldWidget.currentRoute) {
-      _logHighlight('Route changed: ${oldWidget.currentRoute} -> ${widget.currentRoute}');
+      _logHighlight(
+        'Route changed: ${oldWidget.currentRoute} -> ${widget.currentRoute}',
+      );
       if (widget.currentRoute.startsWith('user_')) {
         _logHighlight('Active section: user');
       } else if (widget.currentRoute.startsWith('work_')) {
@@ -105,13 +177,16 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 16),
-                
+
                 // Logo section with company branding
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      Image.asset('lib/adminweb/assets/images/logo.png', height: 40),
+                      Image.asset(
+                        'lib/adminweb/assets/images/logo.png',
+                        height: 40,
+                      ),
                       const SizedBox(width: 8),
                       const Text(
                         'FacilityFix',
@@ -124,7 +199,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                
+
                 // Main navigation section label
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
@@ -139,7 +214,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                
+
                 // Main navigation menu items
                 Expanded(
                   child: ListView(
@@ -148,7 +223,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       // Dashboard navigation item
                       _navItem(Icons.home_outlined, 'Dashboard', 'dashboard'),
                       const SizedBox(height: 4),
-                      
+
                       // User and Role Management dropdown
                       _dropdownNav(
                         icon: Icons.group,
@@ -160,7 +235,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      
+
                       // Work Orders dropdown
                       _dropdownNav(
                         icon: Icons.build_outlined,
@@ -172,11 +247,11 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      
+
                       // Calendar navigation item
                       _navItem(Icons.calendar_today, 'Calendar', 'calendar'),
                       const SizedBox(height: 4),
-                      
+
                       // Inventory Management dropdown
                       _dropdownNav(
                         icon: Icons.inventory_2_outlined,
@@ -188,17 +263,25 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      
+
                       // Analytics navigation item
-                      _navItem(Icons.analytics_outlined, 'Analytics', 'analytics'),
+                      _navItem(
+                        Icons.analytics_outlined,
+                        'Analytics',
+                        'analytics',
+                      ),
                       const SizedBox(height: 4),
-                      
-                      // Announcement navigation item
-                      _navItem(Icons.campaign_outlined, 'Announcement', 'announcement'),
+
+                      // Announcement navigation item - Fixed: changed from 'announcement' to 'announcements'
+                      _navItem(
+                        Icons.campaign_outlined,
+                        'Announcement',
+                        'announcement',
+                      ),
                     ],
                   ),
                 ),
-                
+
                 // Bottom navigation items (Settings & Logout)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -208,7 +291,12 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       const SizedBox(height: 8),
                       _navItem(Icons.settings, 'Settings', 'settings'),
                       const SizedBox(height: 4),
-                      _navItem(Icons.logout, 'Logout', 'logout', isLogout: true),
+                      _navItem(
+                        Icons.logout,
+                        'Logout',
+                        'logout',
+                        isLogout: true,
+                      ),
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -216,7 +304,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
               ],
             ),
           ),
-          
+
           // ====== MAIN CONTENT AREA ======
           Expanded(
             child: Column(
@@ -235,31 +323,69 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         child: TextField(
                           decoration: InputDecoration(
                             hintText: 'Search anything...',
-                            hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                            prefixIcon: const Icon(Icons.search, color: Color(0xFF64748B)),
+                            hintStyle: const TextStyle(
+                              color: Color(0xFF64748B),
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search,
+                              color: Color(0xFF64748B),
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
                             ),
                             filled: true,
                             fillColor: const Color(0xFFF8FAFC),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
                       // Header action buttons
                       Row(
                         children: [
-                          
-                          IconButton(
-                            icon: const Icon(Icons.notifications_outlined),
-                            //onPressed: () => _showNotificationsDialog(), - if backend is integrated na
-                            onPressed: () {
-                              NotificationDialog.show(
-                                context, 
-                                NotificationSampleData.getSampleNotifications()
-                              );
-                            },
+                          Stack(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.notifications_outlined),
+                                onPressed: () async {
+                                  NotificationDialog.show(
+                                    context,
+                                    _notifications,
+                                    onRefresh: _fetchNotifications,
+                                  );
+                                },
+                              ),
+                              if (_unreadCount > 0)
+                                Positioned(
+                                  right: 8,
+                                  top: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 16,
+                                      minHeight: 16,
+                                    ),
+                                    child: Text(
+                                      _unreadCount > 99
+                                          ? '99+'
+                                          : '$_unreadCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           IconButton(
                             icon: const Icon(Icons.person, color: Colors.grey),
@@ -268,21 +394,21 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                             },
                           ),
                         ],
-                      )
+                      ),
                     ],
                   ),
                 ),
-                
+
                 // Main content area with background
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
                     child: widget.body,
                   ),
-                )
+                ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
@@ -291,10 +417,15 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
   // ====== NAVIGATION ITEM BUILDERS ======
 
   /// Builds a regular navigation item with hover effects and active state highlighting
-  Widget _navItem(IconData icon, String title, String routeKey, {bool isLogout = false}) {
+  Widget _navItem(
+    IconData icon,
+    String title,
+    String routeKey, {
+    bool isLogout = false,
+  }) {
     final isSelected = widget.currentRoute == routeKey;
     final isHovered = _hovered[routeKey] ?? false;
-    
+
     return MouseRegion(
       onEnter: (_) {
         _logHighlight('Hover ON -> $routeKey');
@@ -309,20 +440,19 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
         // duration: const Duration(milliseconds: 150),
         margin: const EdgeInsets.symmetric(vertical: 2),
         decoration: BoxDecoration(
-          color: isSelected 
-              ? const Color(0xFFDBEAFE) 
-              : isHovered 
+          color:
+              isSelected
+                  ? const Color(0xFFDBEAFE)
+                  : isHovered
                   ? const Color(0xFFF1F5F9)
                   : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
-          border: isSelected 
-              ? Border(
-                  left: BorderSide(
-                    color: Colors.blue.shade600,
-                    width: 3,
-                  ),
-                )
-              : null,
+          border:
+              isSelected
+                  ? Border(
+                    left: BorderSide(color: Colors.blue.shade600, width: 3),
+                  )
+                  : null,
         ),
         child: Material(
           color: Colors.transparent,
@@ -334,15 +464,16 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
               child: Row(
                 children: [
                   Icon(
-                    icon, 
+                    icon,
                     size: 20,
-                    color: isSelected 
-                        ? Colors.blue.shade600
-                        : isLogout 
+                    color:
+                        isSelected
+                            ? Colors.blue.shade600
+                            : isLogout
                             ? Colors.red.shade600
-                            : isHovered 
-                                ? const Color(0xFF475569)
-                                : const Color(0xFF64748B),
+                            : isHovered
+                            ? const Color(0xFF475569)
+                            : const Color(0xFF64748B),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -350,14 +481,16 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                       title,
                       style: TextStyle(
                         fontSize: 14,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                        color: isSelected 
-                            ? Colors.blue.shade700
-                            : isLogout 
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w500,
+                        color:
+                            isSelected
+                                ? Colors.blue.shade700
+                                : isLogout
                                 ? Colors.red.shade600
-                                : isHovered 
-                                    ? const Color(0xFF1E293B)
-                                    : const Color(0xFF475569),
+                                : isHovered
+                                ? const Color(0xFF1E293B)
+                                : const Color(0xFF475569),
                       ),
                     ),
                   ),
@@ -382,10 +515,10 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
       final valueKey = w.key as ValueKey?;
       return valueKey?.value == widget.currentRoute;
     });
-    
+
     final isExpanded = _expanded[sectionKey] == true;
     final isHovered = _hovered[sectionKey] ?? false;
-    
+
     return MouseRegion(
       onEnter: (_) {
         _logHighlight('Hover ON -> section:$sectionKey');
@@ -399,47 +532,52 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Parent dropdown header
-          // Animation 
+          // Animation
           Container(
             // duration: const Duration(milliseconds: 150),
             margin: const EdgeInsets.symmetric(vertical: 2),
             decoration: BoxDecoration(
-              color: hasSelectedChild 
-                  ? const Color(0xFFDBEAFE) 
-                  : isHovered 
+              color:
+                  hasSelectedChild
+                      ? const Color(0xFFDBEAFE)
+                      : isHovered
                       ? const Color(0xFFF1F5F9)
                       : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
-              border: hasSelectedChild 
-                  ? Border(
-                      left: BorderSide(
-                        color: Colors.blue.shade600,
-                        width: 3,
-                      ),
-                    )
-                  : null,
+              border:
+                  hasSelectedChild
+                      ? Border(
+                        left: BorderSide(color: Colors.blue.shade600, width: 3),
+                      )
+                      : null,
             ),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
                   final next = !isExpanded;
-                  _logHighlight('Toggle expand -> section:$sectionKey -> $next');
+                  _logHighlight(
+                    'Toggle expand -> section:$sectionKey -> $next',
+                  );
                   setState(() {
                     _expanded[sectionKey] = next;
                   });
                 },
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
                       Icon(
-                        icon, 
+                        icon,
                         size: 20,
-                        color: hasSelectedChild 
-                            ? Colors.blue.shade600
-                            : isHovered 
+                        color:
+                            hasSelectedChild
+                                ? Colors.blue.shade600
+                                : isHovered
                                 ? const Color(0xFF475569)
                                 : const Color(0xFF64748B),
                       ),
@@ -449,10 +587,14 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                           title,
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: hasSelectedChild ? FontWeight.w600 : FontWeight.w500,
-                            color: hasSelectedChild 
-                                ? Colors.blue.shade700
-                                : isHovered 
+                            fontWeight:
+                                hasSelectedChild
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                            color:
+                                hasSelectedChild
+                                    ? Colors.blue.shade700
+                                    : isHovered
                                     ? const Color(0xFF1E293B)
                                     : const Color(0xFF475569),
                           ),
@@ -466,9 +608,10 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
                         // child: Icon(
                         //   Icons.expand_more,
                         size: 20,
-                        color: hasSelectedChild 
-                            ? Colors.blue.shade600
-                            : isHovered 
+                        color:
+                            hasSelectedChild
+                                ? Colors.blue.shade600
+                                : isHovered
                                 ? const Color(0xFF475569)
                                 : const Color(0xFF64748B),
                         // ),
@@ -479,16 +622,16 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
               ),
             ),
           ),
-          
+
           // Expandable children container
           isExpanded
               ? Padding(
-                  padding: const EdgeInsets.only(left: 48, top: 4),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: children,
-                  ),
-                )
+                padding: const EdgeInsets.only(left: 48, top: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: children,
+                ),
+              )
               : const SizedBox.shrink(),
           // AnimatedSize(
           //   duration: const Duration(milliseconds: 300),
@@ -512,7 +655,7 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
   Widget _subNavItem(String title, String routeKey) {
     final isSelected = widget.currentRoute == routeKey;
     final isHovered = _hovered[routeKey] ?? false;
-    
+
     return MouseRegion(
       key: ValueKey(routeKey),
       onEnter: (_) {
@@ -528,9 +671,10 @@ class _FacilityFixLayoutState extends State<FacilityFixLayout> {
         // duration: const Duration(milliseconds: 150),
         margin: const EdgeInsets.symmetric(vertical: 1),
         decoration: BoxDecoration(
-          color: isSelected 
-              ? Colors.blue.shade50
-              : isHovered 
+          color:
+              isSelected
+                  ? Colors.blue.shade50
+                  : isHovered
                   ? const Color(0xFFF8FAFC)
                   : Colors.transparent,
           borderRadius: BorderRadius.circular(6),

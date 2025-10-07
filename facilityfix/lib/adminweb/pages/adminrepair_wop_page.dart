@@ -7,7 +7,8 @@ class RepairWorkOrderPermitPage extends StatefulWidget {
   const RepairWorkOrderPermitPage({super.key});
 
   @override
-  State<RepairWorkOrderPermitPage> createState() => _RepairWorkOrderPermitPageState();
+  State<RepairWorkOrderPermitPage> createState() =>
+      _RepairWorkOrderPermitPageState();
 }
 
 class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
@@ -72,7 +73,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
       'department': 'Plumbing',
       //'description': 'The kitchen faucet has been continuously leaking...',
       'assessment': 'Inspected faucet valve. Leak due to worn-out cartridge.',
-      'recommendation': 'Replace faucet cartridge.'
+      'recommendation': 'Replace faucet cartridge.',
     },
   ];
 
@@ -82,9 +83,14 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   String _selectedConcernType = 'Work Order Permit';
 
   // Action dropdown menu methods
-  void _showActionMenu(BuildContext context, Map<String, dynamic> task, Offset position) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    
+  void _showActionMenu(
+    BuildContext context,
+    Map<String, dynamic> task,
+    Offset position,
+  ) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+
     showMenu(
       context: context,
       position: RelativeRect.fromRect(
@@ -104,10 +110,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               const SizedBox(width: 12),
               Text(
                 'View',
-                style: TextStyle(
-                  color: Colors.green[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.green[600], fontSize: 14),
               ),
             ],
           ),
@@ -116,18 +119,11 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           value: 'edit',
           child: Row(
             children: [
-              Icon(
-                Icons.edit_outlined,
-                color: Colors.blue[600],
-                size: 18,
-              ),
+              Icon(Icons.edit_outlined, color: Colors.blue[600], size: 18),
               const SizedBox(width: 12),
               Text(
                 'Edit',
-                style: TextStyle(
-                  color: Colors.blue[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.blue[600], fontSize: 14),
               ),
             ],
           ),
@@ -136,26 +132,17 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
           value: 'delete',
           child: Row(
             children: [
-              Icon(
-                Icons.delete_outline,
-                color: Colors.red[600],
-                size: 18,
-              ),
+              Icon(Icons.delete_outline, color: Colors.red[600], size: 18),
               const SizedBox(width: 12),
               Text(
                 'Delete',
-                style: TextStyle(
-                  color: Colors.red[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.red[600], fontSize: 14),
               ),
             ],
           ),
         ),
       ],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       elevation: 8,
     ).then((value) {
       if (value != null) {
@@ -222,9 +209,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                   ),
                 );
               },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Delete'),
             ),
           ],
@@ -244,13 +229,14 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     48, // ACTION
   ];
 
-  Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
+  Widget _fixedCell(
+    int i,
+    Widget child, {
+    Alignment align = Alignment.centerLeft,
+  }) {
     return SizedBox(
       width: _colW[i],
-      child: Align(
-        alignment: align,
-        child: child,
-      ),
+      child: Align(alignment: align, child: child),
     );
   }
 
@@ -261,7 +247,6 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
     softWrap: false,
     style: style,
   );
-
 
   @override
   Widget build(BuildContext context) {
@@ -349,7 +334,6 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               ),
               child: const Text('Work Order Permit'),
             ),
-            
           ],
         ),
       ],
@@ -359,9 +343,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
   // Filter Section Widget
   Widget _buildFilterSection() {
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
       child: Row(
         children: [
           // Search Field
@@ -370,7 +352,6 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             child: Container(
               height: 40,
               decoration: BoxDecoration(
-                
                 border: Border.all(color: Colors.grey[300]!),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -382,10 +363,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                     size: 20,
                   ),
                   hintText: "Search",
-                  hintStyle: TextStyle(
-                    color: Colors.grey[500],
-                    fontSize: 14,
-                  ),
+                  hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -396,7 +374,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Role Dropdown
           Expanded(
             child: Container(
@@ -415,22 +393,27 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                       _selectedRole = newValue!;
                     });
                   },
-                  items: <String>['All Roles', 'Admin', 'Technician', 'Manager']
-                      .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        'Role: $value',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    );
-                  }).toList(),
+                  items:
+                      <String>[
+                        'All Roles',
+                        'Admin',
+                        'Technician',
+                        'Manager',
+                      ].map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            'Role: $value',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 16),
-          
+
           // Status Dropdown
           Expanded(
             child: Container(
@@ -449,22 +432,28 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                       _selectedStatus = newValue!;
                     });
                   },
-                  items: <String>['All Status', 'Pending', 'In Progress', 'Completed', 'Cancelled']
-                      .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        'Status: $value',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    );
-                  }).toList(),
+                  items:
+                      <String>[
+                        'All Status',
+                        'Pending',
+                        'In Progress',
+                        'Completed',
+                        'Cancelled',
+                      ].map<DropdownMenuItem<String>>((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(
+                            'Status: $value',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 300),
-          
+
           // Filter Button
           Container(
             height: 40,
@@ -477,11 +466,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.tune,
-                  color: Colors.grey[600],
-                  size: 18,
-                ),
+                Icon(Icons.tune, color: Colors.grey[600], size: 18),
                 const SizedBox(width: 8),
                 Text(
                   "Filter",
@@ -547,37 +532,34 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
 
                         // Navigate based on selection
                         if (newValue == 'Concern Slip') {
-                          context.go('/work/repair'); 
+                          context.go('/work/repair');
                         } else if (newValue == 'Job Service') {
                           context.go('/adminweb/pages/adminrepair_js_page');
                         } else if (newValue == 'Work Order Permit') {
                           context.go('/adminweb/pages/adminrepair_wop_page');
                         }
                       },
-                      items: <String>[
-                        'Concern Slip',
-                        'Job Service',
-                        'Work Order Permit'
-                      ].map<DropdownMenuItem<String>>((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(
-                            value,
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        );
-                      }).toList(),
+                      items:
+                          <String>[
+                            'Concern Slip',
+                            'Job Service',
+                            'Work Order Permit',
+                          ].map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(
+                                value,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            );
+                          }).toList(),
                     ),
                   ),
-                )
+                ),
               ],
             ),
           ),
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: Colors.grey[400],
-          ),
+          Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
           // Data Table
           Expanded(
@@ -603,51 +585,100 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                     DataColumn(label: _fixedCell(0, const Text("SERVICE ID"))),
                     DataColumn(label: _fixedCell(1, const Text("CONCERN ID"))),
                     DataColumn(label: _fixedCell(2, const Text("TITLE"))),
-                    DataColumn(label: _fixedCell(3, const Text("BUILDING & UNIT"))),
+                    DataColumn(
+                      label: _fixedCell(3, const Text("BUILDING & UNIT")),
+                    ),
                     DataColumn(label: _fixedCell(4, const Text("SCHEDULE"))),
                     DataColumn(label: _fixedCell(5, const Text("STATUS"))),
                     DataColumn(label: _fixedCell(6, const Text("PRIORITY"))),
                     DataColumn(label: _fixedCell(7, const Text(""))),
                   ],
-                  rows: _repairTasks.map((task) {
-                    return DataRow(
-                      cells: [
-                        DataCell(_fixedCell(0, _ellipsis(task['serviceId'], style: TextStyle(color: Colors.grey[700], fontSize: 13)))),
-                        DataCell(_fixedCell(1, _ellipsis(task['id'],        style: TextStyle(color: Colors.grey[700], fontSize: 13)))),
-                        DataCell(_fixedCell(2, _ellipsis(task['title']))),
-                        DataCell(_fixedCell(3, _ellipsis(task['buildingUnit']))),
-                        DataCell(_fixedCell(4, _ellipsis(task['schedule']))),
+                  rows:
+                      _repairTasks.map((task) {
+                        return DataRow(
+                          cells: [
+                            DataCell(
+                              _fixedCell(
+                                0,
+                                _ellipsis(
+                                  task['serviceId'],
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            DataCell(
+                              _fixedCell(
+                                1,
+                                _ellipsis(
+                                  task['id'],
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            DataCell(_fixedCell(2, _ellipsis(task['title']))),
+                            DataCell(
+                              _fixedCell(3, _ellipsis(task['buildingUnit'])),
+                            ),
+                            DataCell(
+                              _fixedCell(4, _ellipsis(task['schedule'])),
+                            ),
 
-                        // Chips get a fixed box too (and aligned left)
-                        DataCell(_fixedCell(5, _buildStatusChip(task['status']))),
-                        DataCell(_fixedCell(6, _buildPriorityChip(task['priority']))),
+                            // Chips get a fixed box too (and aligned left)
+                            DataCell(
+                              _fixedCell(5, _buildStatusChip(task['status'])),
+                            ),
+                            DataCell(
+                              _fixedCell(
+                                6,
+                                _buildPriorityChip(task['priority']),
+                              ),
+                            ),
 
-                        // Action menu cell (narrow, centered)
-                        DataCell(_fixedCell(7,
-                          Builder(builder: (context) {
-                            return IconButton(
-                              onPressed: () {
-                                final rbx = context.findRenderObject() as RenderBox;
-                                final position = rbx.localToGlobal(Offset.zero);
-                                _showActionMenu(context, task, position);
-                              },
-                              icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
-                            );
-                          }),
-                          align: Alignment.center,
-                        )),
-                      ],
-                    );
-                  }).toList(),
+                            // Action menu cell (narrow, centered)
+                            DataCell(
+                              _fixedCell(
+                                7,
+                                Builder(
+                                  builder: (context) {
+                                    return IconButton(
+                                      onPressed: () {
+                                        final rbx =
+                                            context.findRenderObject()
+                                                as RenderBox;
+                                        final position = rbx.localToGlobal(
+                                          Offset.zero,
+                                        );
+                                        _showActionMenu(
+                                          context,
+                                          task,
+                                          position,
+                                        );
+                                      },
+                                      icon: Icon(
+                                        Icons.more_vert,
+                                        color: Colors.grey[400],
+                                        size: 20,
+                                      ),
+                                    );
+                                  },
+                                ),
+                                align: Alignment.center,
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
                 ),
               ),
             ),
           ),
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: Colors.grey[400],
-          ),
+          Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
           // Pagination Section
           Padding(
@@ -657,19 +688,13 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
               children: [
                 Text(
                   "Showing 1 to 1 of 1 entry",
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
                 Row(
                   children: [
                     IconButton(
                       onPressed: null,
-                      icon: Icon(
-                        Icons.chevron_left,
-                        color: Colors.grey[400],
-                      ),
+                      icon: Icon(Icons.chevron_left, color: Colors.grey[400]),
                     ),
                     Container(
                       width: 32,
@@ -710,10 +735,7 @@ class _RepairWorkOrderPermitPageState extends State<RepairWorkOrderPermitPage> {
                     ),
                     IconButton(
                       onPressed: () {},
-                      icon: Icon(
-                        Icons.chevron_right,
-                        color: Colors.grey[600],
-                      ),
+                      icon: Icon(Icons.chevron_right, color: Colors.grey[600]),
                     ),
                   ],
                 ),

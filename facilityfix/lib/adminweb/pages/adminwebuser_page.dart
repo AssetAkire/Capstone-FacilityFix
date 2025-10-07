@@ -508,6 +508,32 @@ class _AdminUserPageState extends State<AdminUserPage> {
   }
 
   Future<void> _deleteUser(Map<String, dynamic> user) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Confirm Delete'),
+          content: Text(
+            'Are you sure you want to delete ${user['name']}? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // If user didn't confirm, exit early
+    if (confirmed != true) return;
+
     try {
       final userId = user['id'];
       print('[v0] Deleting user $userId');

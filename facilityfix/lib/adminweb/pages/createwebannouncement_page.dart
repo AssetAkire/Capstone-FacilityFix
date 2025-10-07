@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:io';
-import 'package:file_picker/file_picker.dart'; 
+import 'package:file_picker/file_picker.dart';
 import '../layout/facilityfix_layout.dart';
+import '../services/api_service.dart';
 
 class CreateAnnouncementPage extends StatefulWidget {
   const CreateAnnouncementPage({super.key});
@@ -12,6 +13,8 @@ class CreateAnnouncementPage extends StatefulWidget {
 }
 
 class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
+  final ApiService _apiService = ApiService();
+
   // Form controllers for backend integration
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _detailsController = TextEditingController();
@@ -23,11 +26,11 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   String? _selectedType;
   String? _selectedLocation;
   bool _pinToDashboard = false;
-  final List<File> _attachedFiles = [];
+  List<File> _attachedFiles = [];
 
-  // Dropdown options 
+  // Dropdown options
   final List<String> _audienceOptions = ['Tenant', 'Staff', 'All'];
-  
+
   final List<Map<String, dynamic>> _typeOptions = [
     {
       'value': 'Scheduled Maintenance',
@@ -136,7 +139,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
             result.paths
                 .where((path) => path != null)
                 .map((path) => File(path!))
-                .toList()
+                .toList(),
           );
         });
       }
@@ -160,10 +163,11 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    
+
     if (picked != null) {
       setState(() {
-        controller.text = '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
+        controller.text =
+            '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
       });
     }
   }
@@ -192,10 +196,7 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   // Show error snackbar
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
@@ -203,43 +204,64 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
   void _submitForm() async {
     if (!_validateForm()) return;
 
-    // TODO: Replace with actual API call to create announcement
     final announcementData = {
       'title': _titleController.text.trim(),
-      'audience': _selectedAudience,
-      'type': _selectedType,
-      'details': _detailsController.text.trim(),
-      'location': _selectedLocation,
-      'startDate': _startDateController.text,
-      'endDate': _endDateController.text,
-      'pinToDashboard': _pinToDashboard,
-      'attachments': _attachedFiles.map((file) => file.path).toList(),
+      'content': _detailsController.text.trim(),
+      'type': _selectedType ?? 'General Announcement',
+      'audience': _selectedAudience?.toLowerCase() ?? 'all',
+      'location_affected': _selectedLocation,
+      'start_date':
+          _startDateController.text.isNotEmpty
+              ? _startDateController.text
+              : null,
+      'end_date':
+          _endDateController.text.isNotEmpty ? _endDateController.text : null,
+      'pin_to_dashboard': _pinToDashboard,
+      'building_id': 'building_001', // TODO: Get from user session
+      'created_by': 'admin_user', // TODO: Get from user session
     };
 
     // Show loading indicator
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final response = await _apiService.createAnnouncement(announcementData);
 
-    // Hide loading indicator
-    Navigator.of(context).pop();
+      // Hide loading indicator
+      if (mounted) Navigator.of(context).pop();
 
-    // Show success message and navigate back
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Announcement created successfully'),
-        backgroundColor: Colors.green,
-      ),
-    );
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Announcement created successfully! ID: ${response['formatted_id'] ?? response['id']}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
 
-    context.go('/announcement');
+        // Navigate back to announcement list
+        context.go('/announcement');
+      }
+    } catch (e) {
+      // Hide loading indicator
+      if (mounted) Navigator.of(context).pop();
+
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create announcement: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -288,27 +310,30 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                   ),
                   const SizedBox(height: 8),
                   Row(
-                      children: [
-                        TextButton(
-                          onPressed: () => context.go('/dashboard'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                          ),
-                          child: const Text('Dashboard'),
+                    children: [
+                      TextButton(
+                        onPressed: () => context.go('/dashboard'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
-                        TextButton(
-                          onPressed: null,
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                          ),
-                          child: const Text('Announcement'),
+                        child: const Text('Dashboard'),
+                      ),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: Colors.grey,
+                        size: 16,
+                      ),
+                      TextButton(
+                        onPressed: null,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
                         ),
-                        
-                      ],
-                    ),
+                        child: const Text('Announcement'),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 32),
@@ -383,19 +408,22 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                                   decoration: InputDecoration(
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: Colors.grey[300]!),
+                                      borderSide: BorderSide(
+                                        color: Colors.grey[300]!,
+                                      ),
                                     ),
                                     contentPadding: const EdgeInsets.symmetric(
                                       horizontal: 16,
                                       vertical: 12,
                                     ),
                                   ),
-                                  items: _audienceOptions.map((audience) {
-                                    return DropdownMenuItem(
-                                      value: audience,
-                                      child: Text(audience),
-                                    );
-                                  }).toList(),
+                                  items:
+                                      _audienceOptions.map((audience) {
+                                        return DropdownMenuItem(
+                                          value: audience,
+                                          child: Text(audience),
+                                        );
+                                      }).toList(),
                                   onChanged: (value) {
                                     setState(() {
                                       _selectedAudience = value;
@@ -426,29 +454,32 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                                   decoration: InputDecoration(
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: Colors.grey[300]!),
+                                      borderSide: BorderSide(
+                                        color: Colors.grey[300]!,
+                                      ),
                                     ),
                                     contentPadding: const EdgeInsets.symmetric(
                                       horizontal: 16,
                                       vertical: 12,
                                     ),
                                   ),
-                                  items: _typeOptions.map((type) {
-                                    return DropdownMenuItem<String>(
-                                      value: type['value'] as String,
-                                      child: Row(
-                                        children: [
-                                          Icon(
-                                            type['icon'] as IconData,
-                                            color: type['color'] as Color?,
-                                            size: 18,
+                                  items:
+                                      _typeOptions.map((type) {
+                                        return DropdownMenuItem<String>(
+                                          value: type['value'] as String,
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                type['icon'] as IconData,
+                                                color: type['color'] as Color?,
+                                                size: 18,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(type['label'] as String),
+                                            ],
                                           ),
-                                          const SizedBox(width: 8),
-                                          Text(type['label'] as String),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList(),
+                                        );
+                                      }).toList(),
                                   onChanged: (value) {
                                     setState(() {
                                       _selectedType = value;
@@ -481,17 +512,18 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                             topLeft: Radius.circular(8),
                             topRight: Radius.circular(8),
                           ),
-                          border: Border.all(color: Colors.grey[300]!), 
+                          border: Border.all(color: Colors.grey[300]!),
                         ),
-                        alignment: Alignment.centerLeft, // align label to the left
+                        alignment:
+                            Alignment.centerLeft, // align label to the left
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: const Text(
-                            "Text",
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black87,
-                            ),
+                          "Text",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                          ),
                         ),
                       ),
                       TextField(
@@ -535,19 +567,22 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                                   decoration: InputDecoration(
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: Colors.grey[300]!),
+                                      borderSide: BorderSide(
+                                        color: Colors.grey[300]!,
+                                      ),
                                     ),
                                     contentPadding: const EdgeInsets.symmetric(
                                       horizontal: 16,
                                       vertical: 12,
                                     ),
                                   ),
-                                  items: _locationOptions.map((location) {
-                                    return DropdownMenuItem(
-                                      value: location,
-                                      child: Text(location),
-                                    );
-                                  }).toList(),
+                                  items:
+                                      _locationOptions.map((location) {
+                                        return DropdownMenuItem(
+                                          value: location,
+                                          child: Text(location),
+                                        );
+                                      }).toList(),
                                   onChanged: (value) {
                                     setState(() {
                                       _selectedLocation = value;
@@ -581,22 +616,32 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                                         readOnly: true,
                                         decoration: InputDecoration(
                                           hintText: "DD / MM / YY",
-                                          hintStyle: TextStyle(color: Colors.grey[500]),
+                                          hintStyle: TextStyle(
+                                            color: Colors.grey[500],
+                                          ),
                                           border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(8),
-                                            borderSide: BorderSide(color: Colors.grey[300]!),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            borderSide: BorderSide(
+                                              color: Colors.grey[300]!,
+                                            ),
                                           ),
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 12,
-                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 12,
+                                              ),
                                           suffixIcon: Icon(
                                             Icons.calendar_today,
                                             color: Colors.blue[600],
                                             size: 20,
                                           ),
                                         ),
-                                        onTap: () => _selectDate(_startDateController),
+                                        onTap:
+                                            () => _selectDate(
+                                              _startDateController,
+                                            ),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -606,29 +651,43 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                                         readOnly: true,
                                         decoration: InputDecoration(
                                           hintText: "DD / MM / YY",
-                                          hintStyle: TextStyle(color: Colors.grey[500]),
+                                          hintStyle: TextStyle(
+                                            color: Colors.grey[500],
+                                          ),
                                           border: OutlineInputBorder(
-                                            borderRadius: BorderRadius.circular(8),
-                                            borderSide: BorderSide(color: Colors.grey[300]!),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                            borderSide: BorderSide(
+                                              color: Colors.grey[300]!,
+                                            ),
                                           ),
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 16,
-                                            vertical: 12,
-                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 16,
+                                                vertical: 12,
+                                              ),
                                           suffixIcon: Icon(
                                             Icons.calendar_today,
                                             color: Colors.blue[600],
                                             size: 20,
                                           ),
                                         ),
-                                        onTap: () => _selectDate(_endDateController),
+                                        onTap:
+                                            () =>
+                                                _selectDate(_endDateController),
                                       ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                Text("Start date → Expiry Date",
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                                Text(
+                                  "Start date → Expiry Date",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -661,7 +720,11 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.cloud_upload_outlined, size: 32, color: Colors.grey[500]),
+                              Icon(
+                                Icons.cloud_upload_outlined,
+                                size: 32,
+                                color: Colors.grey[500],
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 "Drop files here or click to upload",
@@ -674,7 +737,10 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                               const SizedBox(height: 4),
                               Text(
                                 "PDF, PNG, JPG up to 10MB",
-                                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[500],
+                                ),
                               ),
                             ],
                           ),
@@ -694,17 +760,27 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.attach_file, size: 16, color: Colors.grey[600]),
+                                Icon(
+                                  Icons.attach_file,
+                                  size: 16,
+                                  color: Colors.grey[600],
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    file.path.split(Platform.pathSeparator).last,
+                                    file.path
+                                        .split(Platform.pathSeparator)
+                                        .last,
                                     style: const TextStyle(fontSize: 14),
                                   ),
                                 ),
                                 IconButton(
                                   onPressed: () => _removeFile(index),
-                                  icon: Icon(Icons.close, size: 16, color: Colors.red[600]),
+                                  icon: Icon(
+                                    Icons.close,
+                                    size: 16,
+                                    color: Colors.red[600],
+                                  ),
                                 ),
                               ],
                             ),
@@ -718,12 +794,17 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                            margin: const EdgeInsets.only(top: 12), // spacing from above
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            margin: const EdgeInsets.only(
+                              top: 12,
+                            ), // spacing from above
                             decoration: BoxDecoration(
-                              color: Colors.grey[100], 
-                              borderRadius: BorderRadius.circular(8), 
-                              border: Border.all(color: Colors.grey[300]!), 
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey[300]!),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -752,12 +833,18 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                             icon: const Icon(Icons.send, size: 18),
                             label: const Text(
                               "Publish",
-                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 16,
+                              ),
                             ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF1976D2),
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 32,
+                                vertical: 16,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
                               ),
@@ -766,8 +853,10 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text("Keep visible at top",
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                      Text(
+                        "Keep visible at top",
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
                     ],
                   ),
                 ),
@@ -778,16 +867,18 @@ class _CreateAnnouncementPageState extends State<CreateAnnouncementPage> {
           // Only ONE scroll view. If parent has a finite height, it we stretch to it.
           return SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
-            child: hasBoundedHeight
-                ? ConstrainedBox(
-                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                    child: content,
-                  )
-                : content, // if unbounded, don't force a minHeight
+            child:
+                hasBoundedHeight
+                    ? ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: content,
+                    )
+                    : content, // if unbounded, don't force a minHeight
           );
         },
       ),
     );
   }
-
 }

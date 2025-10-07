@@ -1,16 +1,79 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
-//import '../pages/createwebinventoryitems_page.dart';
+import '../services/api_service.dart';
+import '../../services/auth_storage.dart';
 
 class InventoryManagementItemsPage extends StatefulWidget {
   const InventoryManagementItemsPage({super.key});
 
   @override
-  State<InventoryManagementItemsPage> createState() => _InventoryManagementItemsPageState();
+  State<InventoryManagementItemsPage> createState() =>
+      _InventoryManagementItemsPageState();
 }
 
-class _InventoryManagementItemsPageState extends State<InventoryManagementItemsPage> {
+class _InventoryManagementItemsPageState
+    extends State<InventoryManagementItemsPage> {
+  final ApiService _apiService = ApiService();
+  List<Map<String, dynamic>> _inventoryItems = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  // TODO: Replace with actual building ID from user session
+  final String _buildingId = 'default_building_id';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInventoryItems();
+  }
+
+  Future<void> _loadInventoryItems() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final token = await AuthStorage.getToken();
+      if (token != null && token.isNotEmpty) {
+        _apiService.setAuthToken(token);
+        print('[v0] Auth token retrieved and set in API service');
+      } else {
+        print('[v0] Warning: No auth token found in storage');
+        setState(() {
+          _errorMessage = 'Authentication required. Please log in again.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final response = await _apiService.getInventoryItems(
+        buildingId: _buildingId,
+      );
+
+      if (response['success'] == true) {
+        setState(() {
+          _inventoryItems = List<Map<String, dynamic>>.from(
+            response['data'] ?? [],
+          );
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Failed to load inventory items';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('[v0] Error fetching inventory items: $e');
+      setState(() {
+        _errorMessage = 'Error: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
+  }
+
   // Route mapping helper function
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -55,31 +118,6 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
     );
   }
 
-  // Sample inventory data
-  final List<Map<String, dynamic>> _inventoryItems = [
-    {
-      'itemNo': 'MAT-CIV-003',
-      'itemName': 'Galvanized Screw 3mm',
-      'stock': '150',
-      'tag': 'High-Turnover',
-      'status': 'In Stock',
-    },
-    {
-      'itemNo': 'ELC-WIR-012',
-      'itemName': 'Electrical Wire 12AWG',
-      'stock': '25',
-      'tag': 'Critical',
-      'status': 'Low Stock',
-    },
-    {
-      'itemNo': 'PLB-PIP-006',
-      'itemName': 'PVC Pipe 6 inch',
-      'stock': '0',
-      'tag': 'Essential',
-      'status': 'Out of Stock',
-    },
-  ];
-
   // Column widths for table
   final List<double> _colW = <double>[
     180, // ITEM NO.
@@ -87,11 +125,15 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
     120, // STOCK
     140, // TAG
     120, // STATUS
-    48,  // ACTION
+    48, // ACTION
   ];
 
   // Fixed width cell helper
-  Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
+  Widget _fixedCell(
+    int i,
+    Widget child, {
+    Alignment align = Alignment.centerLeft,
+  }) {
     return SizedBox(
       width: _colW[i],
       child: Align(alignment: align, child: child),
@@ -108,9 +150,14 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
   );
 
   // Action dropdown menu methods
-  void _showActionMenu(BuildContext context, Map<String, dynamic> item, Offset position) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    
+  void _showActionMenu(
+    BuildContext context,
+    Map<String, dynamic> item,
+    Offset position,
+  ) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+
     showMenu(
       context: context,
       position: RelativeRect.fromRect(
@@ -130,10 +177,7 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
               const SizedBox(width: 12),
               Text(
                 'View',
-                style: TextStyle(
-                  color: Colors.green[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.green[600], fontSize: 14),
               ),
             ],
           ),
@@ -142,18 +186,11 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
           value: 'edit',
           child: Row(
             children: [
-              Icon(
-                Icons.edit_outlined,
-                color: Colors.blue[600],
-                size: 18,
-              ),
+              Icon(Icons.edit_outlined, color: Colors.blue[600], size: 18),
               const SizedBox(width: 12),
               Text(
                 'Edit',
-                style: TextStyle(
-                  color: Colors.blue[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.blue[600], fontSize: 14),
               ),
             ],
           ),
@@ -162,26 +199,17 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
           value: 'delete',
           child: Row(
             children: [
-              Icon(
-                Icons.delete_outline,
-                color: Colors.red[600],
-                size: 18,
-              ),
+              Icon(Icons.delete_outline, color: Colors.red[600], size: 18),
               const SizedBox(width: 12),
               Text(
                 'Delete',
-                style: TextStyle(
-                  color: Colors.red[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.red[600], fontSize: 14),
               ),
             ],
           ),
         ),
       ],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       elevation: 8,
     ).then((value) {
       if (value != null) {
@@ -207,7 +235,8 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
 
   // View item method
   void _viewItem(Map<String, dynamic> item) {
-    context.go('/inventory/item/${item['itemNo']}');
+    final itemId = item['id'] ?? item['item_code'];
+    context.go('/inventory/item/$itemId');
   }
 
   // Edit item method
@@ -221,42 +250,80 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
     );
   }
 
-  // Delete item method
   void _deleteItem(Map<String, dynamic> item) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Delete Item'),
-          content: Text('Are you sure you want to delete item ${item['id']}?'),
+          content: Text(
+            'Are you sure you want to delete item ${item['item_name']}?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                // Remove item from list
-                setState(() {
-                  _inventoryItems.removeWhere((t) => t['id'] == item['id']);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Item ${item['id']} deleted'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+                try {
+                  await _apiService.deleteInventoryItem(item['id']);
+                  // Reload the list
+                  _loadInventoryItems();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Item ${item['item_name']} deleted'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error deleting item: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Delete'),
             ),
           ],
         );
       },
     );
+  }
+
+  String _getItemStatus(Map<String, dynamic> item) {
+    final currentStock = item['current_stock'] ?? 0;
+    final reorderLevel = item['reorder_level'] ?? 0;
+
+    if (currentStock == 0) {
+      return 'Out of Stock';
+    } else if (currentStock <= reorderLevel) {
+      return 'Low Stock';
+    } else {
+      return 'In Stock';
+    }
+  }
+
+  String _getItemTag(Map<String, dynamic> item) {
+    final isCritical = item['is_critical'] ?? false;
+    final currentStock = item['current_stock'] ?? 0;
+    final reorderLevel = item['reorder_level'] ?? 0;
+
+    if (isCritical) {
+      return 'Critical';
+    } else if (currentStock > reorderLevel * 2) {
+      return 'High-Turnover';
+    } else {
+      return 'Essential';
+    }
   }
 
   @override
@@ -303,7 +370,11 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
                           ),
                           child: const Text('Dashboard'),
                         ),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Colors.grey,
+                          size: 16,
+                        ),
                         TextButton(
                           onPressed: () => context.go('/inventory/items'),
                           style: TextButton.styleFrom(
@@ -312,7 +383,11 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
                           ),
                           child: const Text('Inventory Management'),
                         ),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Colors.grey,
+                          size: 16,
+                        ),
                         TextButton(
                           onPressed: null,
                           style: TextButton.styleFrom(
@@ -321,7 +396,6 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
                           ),
                           child: const Text('Items'),
                         ),
-                        
                       ],
                     ),
                   ],
@@ -334,15 +408,15 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
                   icon: const Icon(Icons.add, size: 22),
                   label: const Text(
                     "Create New",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1976D2),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 18,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
@@ -417,7 +491,9 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
                             // Filter button
                             Container(
                               height: 40,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                               decoration: BoxDecoration(
                                 border: Border.all(color: Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(8),
@@ -447,72 +523,151 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
                       ],
                     ),
                   ),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: Colors.grey[400],
-                  ),
+                  Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
-                  // Data Table
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columnSpacing: 30,
-                      headingRowHeight: 56,
-                      dataRowHeight: 64,
-                      headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
-                      headingTextStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                        letterSpacing: 0.5,
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.all(40.0),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.red[300],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _errorMessage!,
+                            style: TextStyle(
+                              color: Colors.red[700],
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _loadInventoryItems,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
                       ),
-                      dataTextStyle: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.black87,
+                    )
+                  else if (_inventoryItems.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Center(
+                        child: Text(
+                          'No inventory items found',
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
                       ),
-                      columns: [
-                        DataColumn(label: _fixedCell(0, const Text("ITEM NO."))),
-                        DataColumn(label: _fixedCell(1, const Text("ITEM NAME"))),
-                        DataColumn(label: _fixedCell(2, const Text("STOCK"))),
-                        DataColumn(label: _fixedCell(3, const Text("TAG"))),
-                        DataColumn(label: _fixedCell(4, const Text("STATUS"))),
-                        DataColumn(label: _fixedCell(5, const Text(""))),
-                      ],
-                      rows: _inventoryItems.map((item) {
-                        return DataRow(
-                          cells: [
-                            DataCell(_fixedCell(0, _ellipsis(
-                              item['itemNo'],
-                              style: TextStyle(color: Colors.grey[700], fontSize: 13),
-                            ))),
-                            DataCell(_fixedCell(1, _ellipsis(item['itemName']))),
-                            DataCell(_fixedCell(2, _ellipsis(item['stock']))),
-                            DataCell(_fixedCell(3, _buildTagChip(item['tag']))),
-                            DataCell(_fixedCell(4, _buildStatusChip(item['status']))),
-                            DataCell(_fixedCell(5,
-                            Builder(builder: (context) {
-                              return IconButton(
-                                onPressed: () {
-                                  final rbx = context.findRenderObject() as RenderBox;
-                                  final position = rbx.localToGlobal(Offset.zero);
-                                  _showActionMenu(context, item, position);
-                                },
-                                icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
+                    )
+                  else
+                    // Data Table
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        columnSpacing: 30,
+                        headingRowHeight: 56,
+                        dataRowHeight: 64,
+                        headingRowColor: WidgetStateProperty.all(
+                          Colors.grey[50],
+                        ),
+                        headingTextStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                        dataTextStyle: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                        columns: [
+                          DataColumn(
+                            label: _fixedCell(0, const Text("ITEM NO.")),
+                          ),
+                          DataColumn(
+                            label: _fixedCell(1, const Text("ITEM NAME")),
+                          ),
+                          DataColumn(label: _fixedCell(2, const Text("STOCK"))),
+                          DataColumn(label: _fixedCell(3, const Text("TAG"))),
+                          DataColumn(
+                            label: _fixedCell(4, const Text("STATUS")),
+                          ),
+                          DataColumn(label: _fixedCell(5, const Text(""))),
+                        ],
+                        rows:
+                            _inventoryItems.map((item) {
+                              final itemNo =
+                                  item['item_code'] ?? item['id'] ?? 'N/A';
+                              final itemName = item['item_name'] ?? 'Unknown';
+                              final stock =
+                                  (item['current_stock'] ?? 0).toString();
+                              final tag = _getItemTag(item);
+                              final status = _getItemStatus(item);
+
+                              return DataRow(
+                                cells: [
+                                  DataCell(
+                                    _fixedCell(
+                                      0,
+                                      _ellipsis(
+                                        itemNo,
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(_fixedCell(1, _ellipsis(itemName))),
+                                  DataCell(_fixedCell(2, _ellipsis(stock))),
+                                  DataCell(_fixedCell(3, _buildTagChip(tag))),
+                                  DataCell(
+                                    _fixedCell(4, _buildStatusChip(status)),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      5,
+                                      Builder(
+                                        builder: (context) {
+                                          return IconButton(
+                                            onPressed: () {
+                                              final rbx =
+                                                  context.findRenderObject()
+                                                      as RenderBox;
+                                              final position = rbx
+                                                  .localToGlobal(Offset.zero);
+                                              _showActionMenu(
+                                                context,
+                                                item,
+                                                position,
+                                              );
+                                            },
+                                            icon: Icon(
+                                              Icons.more_vert,
+                                              color: Colors.grey[400],
+                                              size: 20,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                      align: Alignment.center,
+                                    ),
+                                  ),
+                                ],
                               );
-                            }),
-                          align: Alignment.center,
-                        )),
-                          ],
-                        );
-                      }).toList(),
+                            }).toList(),
+                      ),
                     ),
-                  ),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: Colors.grey[400],
-                  ),
+                  Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
                   // Pagination section
                   Padding(
@@ -598,7 +753,7 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
   Widget _buildTagChip(String tag) {
     Color bgColor;
     Color textColor;
-    
+
     switch (tag) {
       case 'High-Turnover':
         bgColor = const Color(0xFFE8F5E8);
@@ -616,7 +771,7 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
         bgColor = Colors.grey[100]!;
         textColor = Colors.grey[700]!;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -638,7 +793,7 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
   Widget _buildStatusChip(String status) {
     Color bgColor;
     Color textColor;
-    
+
     switch (status) {
       case 'In Stock':
         bgColor = const Color(0xFFE3F2FD);
@@ -656,7 +811,7 @@ class _InventoryManagementItemsPageState extends State<InventoryManagementItemsP
         bgColor = Colors.grey[100]!;
         textColor = Colors.grey[700]!;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(

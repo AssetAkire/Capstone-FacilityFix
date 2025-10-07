@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
+import '../services/api_service.dart';
 
 class ExternalViewTaskPage extends StatefulWidget {
   /// Deep-linkable view with optional edit mode.
@@ -41,20 +42,24 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   void _handleLogout(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              context.go('/');
-            },
-            child: const Text('Logout'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Logout'),
+            content: const Text('Are you sure you want to logout?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  context.go('/');
+                },
+                child: const Text('Logout'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -63,7 +68,8 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   bool _isEditMode = false;
 
   // Basic Information
-  final _maintenanceTypeCtrl = TextEditingController(); // typically "External / 3rd-Party"
+  final _maintenanceTypeCtrl =
+      TextEditingController(); // typically "External / 3rd-Party"
   final _serviceCategoryCtrl = TextEditingController();
   final _createdByCtrl = TextEditingController();
   final _dateCreatedCtrl = TextEditingController();
@@ -72,7 +78,8 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   final _recurrenceCtrl = TextEditingController();
   final _startDateCtrl = TextEditingController();
   final _nextDueCtrl = TextEditingController();
-  final _serviceWindowCtrl = TextEditingController(); // "YYYY-MM-DD to YYYY-MM-DD"
+  final _serviceWindowCtrl =
+      TextEditingController(); // "YYYY-MM-DD to YYYY-MM-DD"
 
   // Task Scope & Description
   final _locationCtrl = TextEditingController();
@@ -96,53 +103,25 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   // Snapshot for Cancel
   late Map<String, String> _original;
 
+  final ApiService _apiService = ApiService();
+
   // ---------------- Init / Dispose ----------------
   @override
   void initState() {
     super.initState();
 
-    // Defaults for this view
-    final defaults = <String, dynamic>{
-      // Header & basic info
-      'maintenanceType': 'External / 3rd-Party',
-      'serviceCategory': 'Elevator',
-      'createdBy': 'Michelle Reyes',
-      'dateCreated': '2025-06-15',
-      // Schedule
-      'recurrence': 'Every 6 Months',
-      'startDate': '2025-07-20',
-      'nextDueDate': '2026-01-20',
-      'serviceWindow': '2026-01-20 to 2026-01-23',
-      // Scope
-      'location': 'Building A',
-      'description':
-          'Perform safety inspection, control panel diagnostics, cable tension check, '
-          'lubrication, and door sensor calibration. Includes load test simulation and emergency stop function test.',
-      // Assessment
-      'serviceDateActual': '2025-07-02',
-      'assessmentReceived': 'Yes',
-      'loggedBy': 'David Bautista',
-      'loggedDate': '2025-07-03',
-      // Contractor
-      'contractorName': 'SkyLift Elevator Services, Inc.',
-      'contractPerson': 'Engr. David Ramirez',
-      'contractPhone': '0917-888-1111',
-      'contractEmail': 'david.r@skylift.com.ph',
-      // Notifications
-      'adminNotify': '1 week before, 3 days before, 1 day before',
-      // Title/Code shown in header
-      'taskTitle': 'Elevator Maintenance',
-      'taskCode': widget.taskId,
-    };
+    final Map<String, dynamic> seed = widget.initialTask ?? {};
 
-    final Map<String, dynamic> seed = {
-      ...defaults,
-      ...?widget.initialTask,
-    };
+    if (widget.initialTask == null) {
+      _fetchTaskData();
+    }
 
-    void setText(TextEditingController c, String key) => c.text = (seed[key]?.toString() ?? '');
+    void setText(TextEditingController c, String key) {
+      final value = seed[key] ?? seed[_mapBackendKey(key)] ?? '';
+      c.text = value.toString();
+    }
 
-    // Assign values
+    // Assign values from the actual task data
     setText(_maintenanceTypeCtrl, 'maintenanceType');
     setText(_serviceCategoryCtrl, 'serviceCategory');
     setText(_createdByCtrl, 'createdBy');
@@ -151,13 +130,23 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     setText(_recurrenceCtrl, 'recurrence');
     setText(_startDateCtrl, 'startDate');
     setText(_nextDueCtrl, 'nextDueDate');
-    setText(_serviceWindowCtrl, 'serviceWindow');
+
+    if (seed['serviceWindowStart'] != null &&
+        seed['serviceWindowEnd'] != null) {
+      _serviceWindowCtrl.text =
+          '${seed['serviceWindowStart']} to ${seed['serviceWindowEnd']}';
+    } else {
+      setText(_serviceWindowCtrl, 'serviceWindow');
+    }
 
     setText(_locationCtrl, 'location');
     setText(_descriptionCtrl, 'description');
 
     setText(_serviceDateActualCtrl, 'serviceDateActual');
-    _assessmentReceived = (seed['assessmentReceived']?.toString() ?? 'Yes');
+    _assessmentReceived =
+        (seed['assessmentReceived']?.toString() ??
+            seed['assessment_received']?.toString() ??
+            'Yes');
     setText(_loggedByCtrl, 'loggedBy');
     setText(_loggedDateCtrl, 'loggedDate');
 
@@ -172,7 +161,82 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     _isEditMode = widget.startInEditMode;
   }
 
-  @override
+  Future<void> _fetchTaskData() async {
+    try {
+      final taskData = await _apiService.getMaintenanceTaskById(widget.taskId);
+      if (taskData != null && mounted) {
+        setState(() {
+          // Update controllers with fetched data
+          _maintenanceTypeCtrl.text =
+              taskData['maintenance_type']?.toString() ??
+              'External / 3rd-Party';
+          _serviceCategoryCtrl.text =
+              taskData['service_category']?.toString() ?? '';
+          _createdByCtrl.text = taskData['created_by']?.toString() ?? '';
+          _dateCreatedCtrl.text = taskData['date_created']?.toString() ?? '';
+
+          _recurrenceCtrl.text = taskData['recurrence']?.toString() ?? '';
+          _startDateCtrl.text = taskData['start_date']?.toString() ?? '';
+          _nextDueCtrl.text = taskData['next_due_date']?.toString() ?? '';
+
+          if (taskData['service_window_start'] != null &&
+              taskData['service_window_end'] != null) {
+            _serviceWindowCtrl.text =
+                '${taskData['service_window_start']} to ${taskData['service_window_end']}';
+          }
+
+          _locationCtrl.text = taskData['location']?.toString() ?? '';
+          _descriptionCtrl.text = taskData['description']?.toString() ?? '';
+
+          _serviceDateActualCtrl.text =
+              taskData['service_date_actual']?.toString() ?? '';
+          _assessmentReceived =
+              taskData['assessment_received']?.toString() ?? 'Yes';
+          _loggedByCtrl.text = taskData['logged_by']?.toString() ?? '';
+          _loggedDateCtrl.text = taskData['logged_date']?.toString() ?? '';
+
+          _contractorNameCtrl.text =
+              taskData['contractor_name']?.toString() ?? '';
+          _contractPersonCtrl.text =
+              taskData['contact_person']?.toString() ?? '';
+          _contractPhoneCtrl.text =
+              taskData['contact_number']?.toString() ?? '';
+          _contractEmailCtrl.text = taskData['email']?.toString() ?? '';
+
+          _adminNotifyCtrl.text =
+              taskData['admin_notification']?.toString() ?? '';
+
+          _original = _takeSnapshot();
+        });
+      }
+    } catch (e) {
+      print('[v0] Error fetching task data: $e');
+    }
+  }
+
+  String _mapBackendKey(String frontendKey) {
+    const mapping = {
+      'maintenanceType': 'maintenance_type',
+      'serviceCategory': 'service_category',
+      'createdBy': 'created_by',
+      'dateCreated': 'date_created',
+      'startDate': 'start_date',
+      'nextDueDate': 'next_due_date',
+      'serviceWindowStart': 'service_window_start',
+      'serviceWindowEnd': 'service_window_end',
+      'serviceDateActual': 'service_date_actual',
+      'assessmentReceived': 'assessment_received',
+      'loggedBy': 'logged_by',
+      'loggedDate': 'logged_date',
+      'contractorName': 'contractor_name',
+      'contractPerson': 'contact_person',
+      'contractPhone': 'contact_number',
+      'contractEmail': 'email',
+      'adminNotify': 'admin_notification',
+    };
+    return mapping[frontendKey] ?? frontendKey;
+  }
+
   void dispose() {
     _maintenanceTypeCtrl.dispose();
     _serviceCategoryCtrl.dispose();
@@ -202,26 +266,26 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
   // ---------------- Snapshot / Edit handlers ----------------
   Map<String, String> _takeSnapshot() => {
-        'maintenanceType': _maintenanceTypeCtrl.text,
-        'serviceCategory': _serviceCategoryCtrl.text,
-        'createdBy': _createdByCtrl.text,
-        'dateCreated': _dateCreatedCtrl.text,
-        'recurrence': _recurrenceCtrl.text,
-        'startDate': _startDateCtrl.text,
-        'nextDueDate': _nextDueCtrl.text,
-        'serviceWindow': _serviceWindowCtrl.text,
-        'location': _locationCtrl.text,
-        'description': _descriptionCtrl.text,
-        'serviceDateActual': _serviceDateActualCtrl.text,
-        'assessmentReceived': _assessmentReceived,
-        'loggedBy': _loggedByCtrl.text,
-        'loggedDate': _loggedDateCtrl.text,
-        'contractorName': _contractorNameCtrl.text,
-        'contractPerson': _contractPersonCtrl.text,
-        'contractPhone': _contractPhoneCtrl.text,
-        'contractEmail': _contractEmailCtrl.text,
-        'adminNotify': _adminNotifyCtrl.text,
-      };
+    'maintenanceType': _maintenanceTypeCtrl.text,
+    'serviceCategory': _serviceCategoryCtrl.text,
+    'createdBy': _createdByCtrl.text,
+    'dateCreated': _dateCreatedCtrl.text,
+    'recurrence': _recurrenceCtrl.text,
+    'startDate': _startDateCtrl.text,
+    'nextDueDate': _nextDueCtrl.text,
+    'serviceWindow': _serviceWindowCtrl.text,
+    'location': _locationCtrl.text,
+    'description': _descriptionCtrl.text,
+    'serviceDateActual': _serviceDateActualCtrl.text,
+    'assessmentReceived': _assessmentReceived,
+    'loggedBy': _loggedByCtrl.text,
+    'loggedDate': _loggedDateCtrl.text,
+    'contractorName': _contractorNameCtrl.text,
+    'contractPerson': _contractPersonCtrl.text,
+    'contractPhone': _contractPhoneCtrl.text,
+    'contractEmail': _contractEmailCtrl.text,
+    'adminNotify': _adminNotifyCtrl.text,
+  };
 
   void _enterEditMode() => setState(() => _isEditMode = true);
 
@@ -262,18 +326,38 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       );
       return;
     }
-    // TODO: Persist to backend, e.g.:
-    // await api.updateExternalTask(widget.taskId, _takeSnapshot());
 
-    _original = _takeSnapshot();
-    setState(() => _isEditMode = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Task saved.'), backgroundColor: Colors.green),
-    );
+    try {
+      final updateData = _takeSnapshot();
+      await _apiService.updateMaintenanceTask(widget.taskId, updateData);
+
+      _original = _takeSnapshot();
+      setState(() => _isEditMode = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Task saved successfully.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error saving external maintenance task: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving task: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // ---------------- Validators ----------------
-  String? _req(String? v) => (v == null || v.trim().isEmpty) ? 'Required' : null;
+  String? _req(String? v) =>
+      (v == null || v.trim().isEmpty) ? 'Required' : null;
 
   String? _dateValidator(String? v) {
     if (v == null || v.trim().isEmpty) return 'Required';
@@ -283,7 +367,9 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
   String? _serviceWindowValidator(String? v) {
     if (v == null || v.trim().isEmpty) return 'Required';
-    final ok = RegExp(r'^\d{4}-\d{2}-\d{2}\s+to\s+\d{4}-\d{2}-\d{2}$').hasMatch(v.trim());
+    final ok = RegExp(
+      r'^\d{4}-\d{2}-\d{2}\s+to\s+\d{4}-\d{2}-\d{2}$',
+    ).hasMatch(v.trim());
     return ok ? null : 'Use "YYYY-MM-DD to YYYY-MM-DD"';
   }
 
@@ -296,7 +382,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   String? _phoneValidator(String? v) {
     if (v == null || v.trim().isEmpty) return 'Required';
     // basic PH/intl-ish check; tweak as needed
-    final ok = RegExp(r'^[\d\-\+\s\(\)]{7,}$').hasMatch(v.trim());
+    final ok = RegExp(r'^[\d\-\+\s$$$$]{7,}$').hasMatch(v.trim());
     return ok ? null : 'Enter a valid phone number';
   }
 
@@ -304,9 +390,13 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
   String? _notifyValidator(String? v) {
     if (v == null || v.trim().isEmpty) return 'Required';
     final parts = v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
-    final re = RegExp(r'^\d+\s*(day|days|week|weeks)\s+before$', caseSensitive: false);
+    final re = RegExp(
+      r'^\d+\s*(day|days|week|weeks)\s+before$',
+      caseSensitive: false,
+    );
     for (final p in parts) {
-      if (!re.hasMatch(p)) return 'Use "1 week before", "3 days before", comma-separated';
+      if (!re.hasMatch(p))
+        return 'Use "1 week before", "3 days before", comma-separated';
     }
     return null;
   }
@@ -336,7 +426,11 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
               // Work Orders Title
               const Text(
                 "Work Orders",
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.black87),
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -452,7 +546,6 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           ),
           child: const Text('Maintenance Tasks'),
         ),
-        
       ],
     );
   }
@@ -462,14 +555,25 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     final nextDue = _nextDueCtrl.text.trim();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(color: const Color(0xFFE3F2FD), borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE3F2FD),
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Color(0xFF1976D2), size: 20),
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Color(0xFF1976D2),
+            size: 20,
+          ),
           const SizedBox(width: 12),
           const Text(
             "Tasks Scheduled",
-            style: TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600, fontSize: 14),
+            style: TextStyle(
+              color: Color(0xFF1976D2),
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(width: 8),
           Text(
@@ -483,6 +587,12 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
 
   // -------- Task header + status badges --------
   Widget _buildTaskHeader() {
+    final taskTitle =
+        widget.initialTask?['taskTitle']?.toString() ??
+        widget.initialTask?['task_title']?.toString() ??
+        widget.initialTask?['title']?.toString() ??
+        'External Maintenance Task';
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -491,35 +601,66 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.initialTask?['taskTitle']?.toString() ?? 'Elevator Maintenance',
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black87),
+              taskTitle,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
             ),
             const SizedBox(height: 8),
-            Text(widget.taskId, style: TextStyle(fontSize: 16, color: Colors.grey[600])),
+            Text(
+              widget.taskId,
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
             const SizedBox(height: 4),
-            const Text("Assigned To: External / 3rd-Party",
-                style: TextStyle(fontSize: 14, color: Colors.grey)),
+            const Text(
+              "Assigned To: External / 3rd-Party",
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
           ],
         ),
-        // Status badges
         Row(
           children: [
-            _buildStatusBadge("High Priority", const Color(0xFFFFEBEE), const Color(0xFFD32F2F)),
+            if (widget.initialTask?['priority'] == 'High' ||
+                widget.initialTask?['priority'] == 'Critical')
+              _buildStatusBadge(
+                "High Priority",
+                const Color(0xFFFFEBEE),
+                const Color(0xFFD32F2F),
+              ),
             const SizedBox(width: 12),
-            _buildStatusBadge("Repair-Prone", Colors.grey[200]!, Colors.grey[700]!),
-            const SizedBox(width: 12),
-            _buildStatusBadge("In Stock", const Color(0xFFE8F5E8), const Color(0xFF2E7D32)),
+            if (widget.initialTask?['status'] != null)
+              _buildStatusBadge(
+                widget.initialTask!['status'].toString(),
+                Colors.grey[200]!,
+                Colors.grey[700]!,
+              ),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildStatusBadge(String text, Color backgroundColor, Color textColor) {
+  Widget _buildStatusBadge(
+    String text,
+    Color backgroundColor,
+    Color textColor,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.circular(20)),
-      child: Text(text, style: TextStyle(color: textColor, fontSize: 12, fontWeight: FontWeight.w500)),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 
@@ -533,9 +674,17 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
         children: [
           // Keep maintenance type view-only (external)
           _viewOnlyRow("Maintenance Type", _maintenanceTypeCtrl.text),
-          _editableInfoRow("Service Category", _serviceCategoryCtrl, validator: _req),
+          _editableInfoRow(
+            "Service Category",
+            _serviceCategoryCtrl,
+            validator: _req,
+          ),
           _editableInfoRow("Created By", _createdByCtrl, validator: _req),
-          _editableInfoRow("Date Created", _dateCreatedCtrl, validator: _dateValidator),
+          _editableInfoRow(
+            "Date Created",
+            _dateCreatedCtrl,
+            validator: _dateValidator,
+          ),
         ],
       ),
     );
@@ -549,10 +698,23 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       child: Column(
         children: [
           _editableInfoRow("Recurrence", _recurrenceCtrl, validator: _req),
-          _editableInfoRow("Start Date", _startDateCtrl, validator: _dateValidator),
-          _editableInfoRow("Next Due Date", _nextDueCtrl, validator: _dateValidator, highlight: true),
-          _editableInfoRow("Service Window", _serviceWindowCtrl, validator: _serviceWindowValidator,
-              hint: 'YYYY-MM-DD to YYYY-MM-DD'),
+          _editableInfoRow(
+            "Start Date",
+            _startDateCtrl,
+            validator: _dateValidator,
+          ),
+          _editableInfoRow(
+            "Next Due Date",
+            _nextDueCtrl,
+            validator: _dateValidator,
+            highlight: true,
+          ),
+          _editableInfoRow(
+            "Service Window",
+            _serviceWindowCtrl,
+            validator: _serviceWindowValidator,
+            hint: 'YYYY-MM-DD to YYYY-MM-DD',
+          ),
         ],
       ),
     );
@@ -570,29 +732,39 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           const SizedBox(height: 16),
           const Align(
             alignment: Alignment.centerLeft,
-            child: Text("Task Description",
-                style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500)),
+            child: Text(
+              "Task Description",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           const SizedBox(height: 8),
           _isEditMode
               ? TextFormField(
-                  controller: _descriptionCtrl,
-                  minLines: 3,
-                  maxLines: 6,
-                  validator: _req,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    hintText: 'Describe the work to be done...',
-                  ),
-                )
+                controller: _descriptionCtrl,
+                minLines: 3,
+                maxLines: 6,
+                validator: _req,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  hintText: 'Describe the work to be done...',
+                ),
+              )
               : Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _descriptionCtrl.text,
-                    style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.5),
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _descriptionCtrl.text,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                    height: 1.5,
                   ),
                 ),
+              ),
         ],
       ),
     );
@@ -608,10 +780,14 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           child: Column(
             children: [
               // Service Date (Actual)
-              _editableInfoRow("Service Date (Actual)", _serviceDateActualCtrl, validator: _dateValidator,
-                  trailingCalendarIconWhenView: true),
+              _editableInfoRow(
+                "Service Date (Actual)",
+                _serviceDateActualCtrl,
+                validator: _dateValidator,
+                trailingCalendarIconWhenView: true,
+              ),
 
-              // Assessment Received 
+              // Assessment Received
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Row(
@@ -621,49 +797,77 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
                       flex: 2,
                       child: Text(
                         "Assessment Received",
-                        style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                     Expanded(
                       flex: 3,
-                      child: _isEditMode
-                          ? Container(
-                              height: 32,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey[300]!),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: _assessmentReceived,
-                                  isDense: true,
-                                  style: const TextStyle(fontSize: 14, color: Colors.black87),
-                                  items: const [
-                                    DropdownMenuItem(value: "Yes", child: Text("Yes")),
-                                    DropdownMenuItem(value: "No", child: Text("No")),
-                                  ],
-                                  onChanged: (v) => setState(() => _assessmentReceived = v ?? 'Yes'),
+                      child:
+                          _isEditMode
+                              ? Container(
+                                height: 32,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: DropdownButtonHideUnderline(
+                                  child: DropdownButton<String>(
+                                    value: _assessmentReceived,
+                                    isDense: true,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black87,
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: "Yes",
+                                        child: Text("Yes"),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: "No",
+                                        child: Text("No"),
+                                      ),
+                                    ],
+                                    onChanged:
+                                        (v) => setState(
+                                          () =>
+                                              _assessmentReceived = v ?? 'Yes',
+                                        ),
+                                  ),
+                                ),
+                              )
+                              : Text(
+                                _assessmentReceived,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            )
-                          : Text(
-                              _assessmentReceived,
-                              style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500),
-                            ),
                     ),
                   ],
                 ),
               ),
 
               _editableInfoRow("Logged By", _loggedByCtrl, validator: _req),
-              _editableInfoRow("Logged Date", _loggedDateCtrl, validator: _dateValidator),
+              _editableInfoRow(
+                "Logged Date",
+                _loggedDateCtrl,
+                validator: _dateValidator,
+              ),
             ],
           ),
         ),
         const SizedBox(height: 24),
 
-        // Assessment (outside card) – view-only content 
+        // Assessment (outside card) – view-only content
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
@@ -675,17 +879,26 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
-              Text("Assessment",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
+              Text(
+                "Assessment",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
               SizedBox(height: 16),
               // keep static sample text
-              _StaticGreyPanel(text: "Elevator cables passed inspection; slight vibration in motor."),
+              _StaticGreyPanel(
+                text:
+                    "Elevator cables passed inspection; slight vibration in motor.",
+              ),
             ],
           ),
         ),
         const SizedBox(height: 24),
 
-        // Recommend (outside card) – view-only content 
+        // Recommend (outside card) – view-only content
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(24),
@@ -697,10 +910,19 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
-              Text("Recommend",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
+              Text(
+                "Recommend",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
               SizedBox(height: 16),
-              _StaticGreyPanel(text: "Recommend motor re-alignment in next quarter; monitor panel errors."),
+              _StaticGreyPanel(
+                text:
+                    "Recommend motor re-alignment in next quarter; monitor panel errors.",
+              ),
             ],
           ),
         ),
@@ -716,10 +938,26 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       title: "Contractor Information",
       child: Column(
         children: [
-          _editableInfoRow("Contractor Name", _contractorNameCtrl, validator: _req),
-          _editableInfoRow("Contact Person", _contractPersonCtrl, validator: _req),
-          _editableInfoRow("Phone Number", _contractPhoneCtrl, validator: _phoneValidator),
-          _editableInfoRow("Email", _contractEmailCtrl, validator: _emailValidator),
+          _editableInfoRow(
+            "Contractor Name",
+            _contractorNameCtrl,
+            validator: _req,
+          ),
+          _editableInfoRow(
+            "Contact Person",
+            _contractPersonCtrl,
+            validator: _req,
+          ),
+          _editableInfoRow(
+            "Phone Number",
+            _contractPhoneCtrl,
+            validator: _phoneValidator,
+          ),
+          _editableInfoRow(
+            "Email",
+            _contractEmailCtrl,
+            validator: _emailValidator,
+          ),
         ],
       ),
     );
@@ -744,7 +982,7 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
     );
   }
 
-  // Attachments 
+  // Attachments
   Widget _buildAttachmentsCard() {
     return _buildCard(
       icon: Icons.attach_file_outlined,
@@ -752,15 +990,30 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
       title: "Attachments",
       child: Column(
         children: [
-          _buildAttachmentItem("towerA_elevator_check_july2025.pdf", Icons.picture_as_pdf, Colors.red, "PDF"),
+          _buildAttachmentItem(
+            "towerA_elevator_check_july2025.pdf",
+            Icons.picture_as_pdf,
+            Colors.red,
+            "PDF",
+          ),
           const SizedBox(height: 12),
-          _buildAttachmentItem("door-sensor-before.jpg", Icons.image, Colors.green, "IMG"),
+          _buildAttachmentItem(
+            "door-sensor-before.jpg",
+            Icons.image,
+            Colors.green,
+            "IMG",
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildAttachmentItem(String filename, IconData icon, Color iconColor, String type) {
+  Widget _buildAttachmentItem(
+    String filename,
+    IconData icon,
+    Color iconColor,
+    String type,
+  ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -772,7 +1025,10 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
             child: Icon(icon, color: iconColor, size: 20),
           ),
           const SizedBox(width: 12),
@@ -782,15 +1038,28 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
               children: [
                 Text(
                   filename,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
                 ),
-                Text("Image File", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                Text(
+                  "Image File",
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
               ],
             ),
           ),
           IconButton(
-            onPressed: () {/* TODO: preview/download */},
-            icon: Icon(Icons.visibility_outlined, color: Colors.grey[600], size: 20),
+            onPressed: () {
+              /* TODO: preview/download */
+            },
+            icon: Icon(
+              Icons.visibility_outlined,
+              color: Colors.grey[600],
+              size: 20,
+            ),
           ),
         ],
       ),
@@ -820,7 +1089,14 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
             children: [
               Icon(icon, color: iconColor, size: 20),
               const SizedBox(width: 12),
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -839,8 +1115,14 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
         children: [
           const Expanded(
             flex: 2,
-            child: Text("Maintenance Type",
-                style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500)),
+            child: Text(
+              "Maintenance Type",
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           Expanded(
             flex: 3,
@@ -873,41 +1155,54 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
         children: [
           Expanded(
             flex: 2,
-            child: Text(label, style: const TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w500)),
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
           Expanded(
             flex: 3,
-            child: _isEditMode
-                ? TextFormField(
-                    controller: controller,
-                    validator: validator,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      hintText: hint,
-                      border: const OutlineInputBorder(),
-                      errorMaxLines: 2,
-                    ),
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          controller.text,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: highlight ? Colors.red[600] : Colors.black87,
-                            fontWeight: FontWeight.w500,
+            child:
+                _isEditMode
+                    ? TextFormField(
+                      controller: controller,
+                      validator: validator,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: hint,
+                        border: const OutlineInputBorder(),
+                        errorMaxLines: 2,
+                      ),
+                    )
+                    : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            controller.text,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color:
+                                  highlight ? Colors.red[600] : Colors.black87,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ),
-                      ),
-                      if (trailingCalendarIconWhenView) ...[
-                        const SizedBox(width: 8),
-                        Icon(Icons.calendar_today_outlined, color: const Color(0xFF1976D2), size: 18),
+                        if (trailingCalendarIconWhenView) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            color: const Color(0xFF1976D2),
+                            size: 18,
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
+                    ),
           ),
         ],
       ),
@@ -928,7 +1223,9 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1976D2),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 0,
               ),
               child: Row(
@@ -936,7 +1233,10 @@ class _ExternalViewTaskPageState extends State<ExternalViewTaskPage> {
                 children: const [
                   Icon(Icons.edit_outlined, size: 18),
                   SizedBox(width: 8),
-                  Text("Edit Task", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                  Text(
+                    "Edit Task",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
                 ],
               ),
             ),
@@ -988,7 +1288,14 @@ class _StaticGreyPanel extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.grey[200]!),
       ),
-      child: Text(text, style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.4)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Colors.black87,
+          height: 1.4,
+        ),
+      ),
     );
   }
 }

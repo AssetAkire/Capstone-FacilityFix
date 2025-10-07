@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../layout/facilityfix_layout.dart';
+import '../services/api_service.dart';
 
 class InventoryRequestPage extends StatefulWidget {
   const InventoryRequestPage({super.key});
@@ -10,6 +12,55 @@ class InventoryRequestPage extends StatefulWidget {
 }
 
 class _InventoryRequestPageState extends State<InventoryRequestPage> {
+  final ApiService _apiService = ApiService();
+  List<Map<String, dynamic>> _requestItems = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  // TODO: Replace with actual building ID from user session
+  final String _buildingId = 'default_building_id';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInventoryRequests();
+  }
+
+  Future<void> _loadInventoryRequests() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final response = await _apiService.getInventoryRequests(
+        buildingId: _buildingId,
+      );
+
+      print('[v0] Inventory requests response: $response');
+
+      if (response['success'] == true) {
+        setState(() {
+          _requestItems = List<Map<String, dynamic>>.from(
+            response['data'] ?? [],
+          );
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Failed to load inventory requests';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('[v0] Error fetching inventory requests: $e');
+      setState(() {
+        _errorMessage = 'Error: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
+  }
+
   // Route mapping helper function
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
@@ -54,55 +105,23 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     );
   }
 
-  // Sample inventory request data - modified for request structure
-  final List<Map<String, dynamic>> _requestItems = [
-    {
-      'requestId': 'EQ-001',
-      'itemName': 'LED Tube Light',
-      'itemType': 'Electrical Supply',
-      'quantity': '10',
-      'date': '07-21-2026',
-      'status': 'Pending',
-    },
-    {
-      'requestId': 'REQ-002',
-      'itemName': 'PVC Pipe 4 inch',
-      'itemType': 'Plumbing Supply',
-      'quantity': '5',
-      'date': '07-20-2026',
-      'status': 'Approved',
-    },
-    {
-      'requestId': 'REQ-003',
-      'itemName': 'Safety Helmet',
-      'itemType': 'Safety Equipment',
-      'quantity': '3',
-      'date': '07-19-2026',
-      'status': 'Rejected',
-    },
-    {
-      'requestId': 'REQ-004',
-      'itemName': 'Galvanized Screw 5mm',
-      'itemType': 'Hardware',
-      'quantity': '50',
-      'date': '07-18-2026',
-      'status': 'Completed',
-    },
-  ];
-
-  // Column widths for table 
+  // Column widths for table
   final List<double> _colW = <double>[
     150, // REQUEST ID
     200, // ITEM NAME
-    180, // ITEM TYPE
+    180, // ITEM TYPE (now PURPOSE)
     100, // QUANTITY
     120, // DATE
     120, // STATUS
-    48,  // ACTION
+    48, // ACTION
   ];
 
   // Fixed width cell helper
-  Widget _fixedCell(int i, Widget child, {Alignment align = Alignment.centerLeft}) {
+  Widget _fixedCell(
+    int i,
+    Widget child, {
+    Alignment align = Alignment.centerLeft,
+  }) {
     return SizedBox(
       width: _colW[i],
       child: Align(alignment: align, child: child),
@@ -118,10 +137,15 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     style: style,
   );
 
-  // Action dropdown menu methods 
-  void _showActionMenu(BuildContext context, Map<String, dynamic> item, Offset position) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    
+  // Action dropdown menu methods
+  void _showActionMenu(
+    BuildContext context,
+    Map<String, dynamic> item,
+    Offset position,
+  ) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+
     showMenu(
       context: context,
       position: RelativeRect.fromRect(
@@ -141,16 +165,13 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
               const SizedBox(width: 12),
               Text(
                 'View Details',
-                style: TextStyle(
-                  color: Colors.green[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.green[600], fontSize: 14),
               ),
             ],
           ),
         ),
         // Show approve/reject options only for pending requests
-        if (item['status'] == 'Pending') ...[
+        if (item['status'] == 'pending') ...[
           PopupMenuItem(
             value: 'approve',
             child: Row(
@@ -163,10 +184,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                 const SizedBox(width: 12),
                 Text(
                   'Approve',
-                  style: TextStyle(
-                    color: Colors.blue[600],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.blue[600], fontSize: 14),
                 ),
               ],
             ),
@@ -175,18 +193,11 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
             value: 'reject',
             child: Row(
               children: [
-                Icon(
-                  Icons.cancel_outlined,
-                  color: Colors.red[600],
-                  size: 18,
-                ),
+                Icon(Icons.cancel_outlined, color: Colors.red[600], size: 18),
                 const SizedBox(width: 12),
                 Text(
                   'Reject',
-                  style: TextStyle(
-                    color: Colors.red[600],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.red[600], fontSize: 14),
                 ),
               ],
             ),
@@ -196,26 +207,17 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
           value: 'delete',
           child: Row(
             children: [
-              Icon(
-                Icons.delete_outline,
-                color: Colors.red[600],
-                size: 18,
-              ),
+              Icon(Icons.delete_outline, color: Colors.red[600], size: 18),
               const SizedBox(width: 12),
               Text(
                 'Delete',
-                style: TextStyle(
-                  color: Colors.red[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.red[600], fontSize: 14),
               ),
             ],
           ),
         ),
       ],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       elevation: 8,
     ).then((value) {
       if (value != null) {
@@ -224,7 +226,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     });
   }
 
-  // Handle action selection 
+  // Handle action selection
   void _handleActionSelection(String action, Map<String, dynamic> item) {
     switch (action) {
       case 'view':
@@ -244,71 +246,150 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
 
   // View request method
   void _viewRequest(Map<String, dynamic> item) {
-    context.go('/inventory/request/${item['requestId']}');
+    final requestId = item['id'];
+    context.go('/inventory/request/$requestId');
   }
 
-  // Approve request method
-  void _approveRequest(Map<String, dynamic> item) {
-    setState(() {
-      final index = _requestItems.indexWhere((req) => req['requestId'] == item['requestId']);
-      if (index != -1) {
-        _requestItems[index]['status'] = 'Approved';
+  void _approveRequest(Map<String, dynamic> item) async {
+    try {
+      await _apiService.approveInventoryRequest(item['id']);
+      // Reload the list
+      _loadInventoryRequests();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Request ${item['id']} approved'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Request ${item['requestId']} approved'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    } catch (e) {
+      print('[v0] Error approving request: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error approving request: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
-  // Reject request method
   void _rejectRequest(Map<String, dynamic> item) {
-    setState(() {
-      final index = _requestItems.indexWhere((req) => req['requestId'] == item['requestId']);
-      if (index != -1) {
-        _requestItems[index]['status'] = 'Rejected';
-      }
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Request ${item['requestId']} rejected'),
-        backgroundColor: Colors.orange,
-      ),
-    );
-  }
-
-  // Delete request method
-  void _deleteRequest(Map<String, dynamic> item) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
+        final TextEditingController reasonController = TextEditingController();
+
         return AlertDialog(
-          title: const Text('Delete Request'),
-          content: Text('Are you sure you want to delete request ${item['requestId']}?'),
+          title: const Text('Reject Request'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Are you sure you want to reject request ${item['id']}?'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                decoration: const InputDecoration(
+                  labelText: 'Reason for rejection',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                // Remove request from list
-                setState(() {
-                  _requestItems.removeWhere((req) => req['requestId'] == item['requestId']);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Request ${item['requestId']} deleted'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+                try {
+                  await _apiService.denyInventoryRequest(
+                    item['id'],
+                    reasonController.text.isEmpty
+                        ? 'Request rejected by admin'
+                        : reasonController.text,
+                  );
+                  // Reload the list
+                  _loadInventoryRequests();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Request ${item['id']} rejected'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  print('[v0] Error rejecting request: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error rejecting request: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
               },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Reject'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _deleteRequest(Map<String, dynamic> item) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Request'),
+          content: Text(
+            'Are you sure you want to delete request ${item['id']}?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                try {
+                  await _apiService.denyInventoryRequest(
+                    item['id'],
+                    'Request deleted by admin',
+                  );
+                  // Reload the list
+                  _loadInventoryRequests();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Request ${item['id']} deleted'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  print('[v0] Error deleting request: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error deleting request: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
               child: const Text('Delete'),
             ),
           ],
@@ -317,10 +398,28 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     );
   }
 
+  String _formatDate(dynamic date) {
+    if (date == null) return 'N/A';
+
+    try {
+      DateTime dateTime;
+      if (date is String) {
+        dateTime = DateTime.parse(date);
+      } else if (date is DateTime) {
+        dateTime = date;
+      } else {
+        return 'N/A';
+      }
+      return DateFormat('MM-dd-yyyy').format(dateTime);
+    } catch (e) {
+      return 'N/A';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FacilityFixLayout(
-      currentRoute: 'inventory_request', 
+      currentRoute: 'inventory_request',
       onNavigate: (routeKey) {
         final routePath = _getRoutePath(routeKey);
         if (routePath != null) {
@@ -334,7 +433,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Section with breadcrumbs 
+            // Header Section with breadcrumbs
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -350,7 +449,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Breadcrumb navigation 
+                    // Breadcrumb navigation
                     Row(
                       children: [
                         TextButton(
@@ -361,7 +460,11 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                           ),
                           child: const Text('Dashboard'),
                         ),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Colors.grey,
+                          size: 16,
+                        ),
                         TextButton(
                           onPressed: () => context.go('/inventory/items'),
                           style: TextButton.styleFrom(
@@ -370,7 +473,11 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                           ),
                           child: const Text('Inventory Management'),
                         ),
-                        const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: Colors.grey,
+                          size: 16,
+                        ),
                         TextButton(
                           onPressed: null,
                           style: TextButton.styleFrom(
@@ -379,7 +486,6 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                           ),
                           child: const Text('Request'),
                         ),
-                        
                       ],
                     ),
                   ],
@@ -388,7 +494,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
             ),
             const SizedBox(height: 32),
 
-            // Main Content Container 
+            // Main Content Container
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
@@ -403,7 +509,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
               ),
               child: Column(
                 children: [
-                  // Table header with search and filter 
+                  // Table header with search and filter
                   Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Row(
@@ -417,7 +523,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                             color: Colors.black87,
                           ),
                         ),
-                        // Search and Filter section 
+                        // Search and Filter section
                         Row(
                           children: [
                             // Search field
@@ -452,7 +558,9 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                             // Filter button
                             Container(
                               height: 40,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
                               decoration: BoxDecoration(
                                 border: Border.all(color: Colors.grey[300]!),
                                 borderRadius: BorderRadius.circular(8),
@@ -482,86 +590,179 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
                       ],
                     ),
                   ),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: Colors.grey[400],
-                  ),
+                  Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
-                  // Data Table 
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columnSpacing: 30,
-                      headingRowHeight: 56,
-                      dataRowHeight: 64,
-                      headingRowColor: WidgetStateProperty.all(Colors.grey[50]),
-                      headingTextStyle: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[600],
-                        letterSpacing: 0.5,
+                  if (_isLoading)
+                    const Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.all(40.0),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 48,
+                            color: Colors.red[300],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _errorMessage!,
+                            style: TextStyle(
+                              color: Colors.red[700],
+                              fontSize: 16,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _loadInventoryRequests,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Retry'),
+                          ),
+                        ],
                       ),
-                      dataTextStyle: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.black87,
+                    )
+                  else if (_requestItems.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Center(
+                        child: Text(
+                          'No inventory requests found',
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
+                        ),
                       ),
-                      columns: [
-                        DataColumn(label: _fixedCell(0, const Text("REQUEST ID"))),
-                        DataColumn(label: _fixedCell(1, const Text("ITEM NAME"))),
-                        DataColumn(label: _fixedCell(2, const Text("ITEM TYPE"))),
-                        DataColumn(label: _fixedCell(3, const Text("QUANTITY"))),
-                        DataColumn(label: _fixedCell(4, const Text("DATE"))),
-                        DataColumn(label: _fixedCell(5, const Text("STATUS"))),
-                        DataColumn(label: _fixedCell(6, const Text(""))),
-                      ],
-                      rows: _requestItems.map((item) {
-                        return DataRow(
-                          cells: [
-                            DataCell(_fixedCell(0, _ellipsis(
-                              item['requestId'],
-                              style: TextStyle(color: Colors.grey[700], fontSize: 13),
-                            ))),
-                            DataCell(_fixedCell(1, _ellipsis(item['itemName']))),
-                            DataCell(_fixedCell(2, _ellipsis(
-                              item['itemType'],
-                              style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                            ))),
-                            DataCell(_fixedCell(3, _ellipsis(item['quantity']))),
-                            DataCell(_fixedCell(4, _ellipsis(item['date']))),
-                            DataCell(_fixedCell(5, _buildStatusChip(item['status']))),
-                            DataCell(_fixedCell(6,
-                            Builder(builder: (context) {
-                              return IconButton(
-                                onPressed: () {
-                                  final rbx = context.findRenderObject() as RenderBox;
-                                  final position = rbx.localToGlobal(Offset.zero);
-                                  _showActionMenu(context, item, position);
-                                },
-                                icon: Icon(Icons.more_vert, color: Colors.grey[400], size: 20),
+                    )
+                  else
+                    // Data Table
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        columnSpacing: 30,
+                        headingRowHeight: 56,
+                        dataRowHeight: 64,
+                        headingRowColor: WidgetStateProperty.all(
+                          Colors.grey[50],
+                        ),
+                        headingTextStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[600],
+                          letterSpacing: 0.5,
+                        ),
+                        dataTextStyle: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                        columns: [
+                          DataColumn(
+                            label: _fixedCell(0, const Text("REQUEST ID")),
+                          ),
+                          DataColumn(
+                            label: _fixedCell(1, const Text("ITEM NAME")),
+                          ),
+                          DataColumn(
+                            label: _fixedCell(2, const Text("PURPOSE")),
+                          ),
+                          DataColumn(
+                            label: _fixedCell(3, const Text("QUANTITY")),
+                          ),
+                          DataColumn(label: _fixedCell(4, const Text("DATE"))),
+                          DataColumn(
+                            label: _fixedCell(5, const Text("STATUS")),
+                          ),
+                          DataColumn(label: _fixedCell(6, const Text(""))),
+                        ],
+                        rows:
+                            _requestItems.map((item) {
+                              final requestId = item['id'] ?? 'N/A';
+                              final itemName =
+                                  item['item_name'] ??
+                                  'Item ${item['inventory_id'] ?? 'Unknown'}';
+                              final purpose = item['purpose'] ?? 'General';
+                              final quantity =
+                                  (item['quantity_requested'] ?? 0).toString();
+                              final date = _formatDate(item['requested_date']);
+                              final status = item['status'] ?? 'pending';
+
+                              return DataRow(
+                                cells: [
+                                  DataCell(
+                                    _fixedCell(
+                                      0,
+                                      _ellipsis(
+                                        requestId,
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(_fixedCell(1, _ellipsis(itemName))),
+                                  DataCell(
+                                    _fixedCell(
+                                      2,
+                                      _ellipsis(
+                                        purpose,
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(_fixedCell(3, _ellipsis(quantity))),
+                                  DataCell(_fixedCell(4, _ellipsis(date))),
+                                  DataCell(
+                                    _fixedCell(5, _buildStatusChip(status)),
+                                  ),
+                                  DataCell(
+                                    _fixedCell(
+                                      6,
+                                      Builder(
+                                        builder: (context) {
+                                          return IconButton(
+                                            onPressed: () {
+                                              final rbx =
+                                                  context.findRenderObject()
+                                                      as RenderBox;
+                                              final position = rbx
+                                                  .localToGlobal(Offset.zero);
+                                              _showActionMenu(
+                                                context,
+                                                item,
+                                                position,
+                                              );
+                                            },
+                                            icon: Icon(
+                                              Icons.more_vert,
+                                              color: Colors.grey[400],
+                                              size: 20,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                      align: Alignment.center,
+                                    ),
+                                  ),
+                                ],
                               );
-                            }),
-                          align: Alignment.center,
-                        )),
-                          ],
-                        );
-                      }).toList(),
+                            }).toList(),
+                      ),
                     ),
-                  ),
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: Colors.grey[400],
-                  ),
+                  Divider(height: 1, thickness: 1, color: Colors.grey[400]),
 
-                  // Pagination section 
+                  // Pagination section
                   Padding(
                     padding: const EdgeInsets.all(20.0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          "Showing 1 to 2 of 2 entries",
+                          "Showing 1 to ${_requestItems.length} of ${_requestItems.length} entries",
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 14,
@@ -634,33 +835,39 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
     );
   }
 
-  // Status chip widget 
+  // Status chip widget
   Widget _buildStatusChip(String status) {
     Color bgColor;
     Color textColor;
-    
-    switch (status) {
-      case 'Pending':
+
+    switch (status.toLowerCase()) {
+      case 'pending':
         bgColor = const Color(0xFFFFF3E0);
         textColor = const Color(0xFFE65100);
         break;
-      case 'Approved':
+      case 'approved':
         bgColor = const Color(0xFFE8F5E8);
         textColor = const Color(0xFF2E7D32);
         break;
-      case 'Rejected':
+      case 'denied':
+      case 'rejected':
         bgColor = const Color(0xFFFFEBEE);
         textColor = const Color(0xFFD32F2F);
         break;
-      case 'Completed':
+      case 'fulfilled':
+      case 'completed':
         bgColor = const Color(0xFFE3F2FD);
         textColor = const Color(0xFF1976D2);
+        break;
+      case 'cancelled':
+        bgColor = Colors.grey[200]!;
+        textColor = Colors.grey[700]!;
         break;
       default:
         bgColor = Colors.grey[100]!;
         textColor = Colors.grey[700]!;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -668,7 +875,7 @@ class _InventoryRequestPageState extends State<InventoryRequestPage> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Text(
-        status,
+        status[0].toUpperCase() + status.substring(1),
         style: TextStyle(
           color: textColor,
           fontSize: 12,

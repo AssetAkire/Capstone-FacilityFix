@@ -2,16 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import '../layout/facilityfix_layout.dart';
+import '../services/api_service.dart';
+import '../../services/auth_storage.dart';
 
 class InventoryItemCreatePage extends StatefulWidget {
   const InventoryItemCreatePage({super.key});
 
   @override
-  State<InventoryItemCreatePage> createState() => _InventoryItemCreatePageState();
+  State<InventoryItemCreatePage> createState() =>
+      _InventoryItemCreatePageState();
 }
 
 class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
-  // ========== FORM CONTROLLERS ==========
+  final ApiService _apiService = ApiService();
+
   final _formKey = GlobalKey<FormState>();
   final _itemNameController = TextEditingController();
   final _itemCodeController = TextEditingController();
@@ -20,18 +24,17 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   final _reorderLevelController = TextEditingController();
   final _supplierController = TextEditingController();
   final _warrantyDateController = TextEditingController();
-  
-  // ========== FORM STATE VARIABLES ==========
-  bool _isValidationEnabled = false; // Enable validation after first save attempt
-  bool _isSaving = false; // Loading state for save button
-  
-  // Dropdown values
+
+  bool _isValidationEnabled = false;
+  bool _isSaving = false;
+
   String? _selectedClassification;
   String? _selectedDepartment;
   String? _selectedUnit;
   String? _selectedTag;
-  
-  // ========== DROPDOWN OPTIONS ==========
+
+  final String _buildingId = 'default_building_id';
+
   final List<String> _classifications = [
     'Materials',
     'Tools',
@@ -39,7 +42,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     'Consumables',
     'Spare Parts',
   ];
-  
+
   final List<String> _departments = [
     'Civil/Carpentry',
     'Electrical',
@@ -47,7 +50,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     'HVAC',
     'General Maintenance',
   ];
-  
+
   final List<String> _units = [
     'pcs',
     'box',
@@ -58,7 +61,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     'meter',
     'pack',
   ];
-  
+
   final List<String> _tags = [
     'High-Turnover',
     'Critical',
@@ -67,8 +70,35 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _initializeAuth();
+  }
+
+  Future<void> _initializeAuth() async {
+    try {
+      final token = await AuthStorage.getToken();
+      if (token != null && token.isNotEmpty) {
+        _apiService.setAuthToken(token);
+        print('[v0] Auth token retrieved and set in API service');
+      } else {
+        print('[v0] Warning: No auth token found in storage');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Authentication required. Please log in again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('[v0] Error retrieving auth token: $e');
+    }
+  }
+
+  @override
   void dispose() {
-    // Clean up controllers
     _itemNameController.dispose();
     _itemCodeController.dispose();
     _brandNameController.dispose();
@@ -79,7 +109,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     super.dispose();
   }
 
-  // ========== ROUTE MAPPING ==========
   String? _getRoutePath(String routeKey) {
     final Map<String, String> pathMap = {
       'dashboard': '/dashboard',
@@ -97,7 +126,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     return pathMap[routeKey];
   }
 
-  // ========== LOGOUT FUNCTIONALITY ==========
   void _handleLogout(BuildContext context) {
     showDialog(
       context: context,
@@ -123,7 +151,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     );
   }
 
-  // ========== DATE PICKER ==========
   Future<void> _selectWarrantyDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -133,9 +160,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF1976D2),
-            ),
+            colorScheme: const ColorScheme.light(primary: Color(0xFF1976D2)),
           ),
           child: child!,
         );
@@ -143,13 +168,12 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     );
     if (picked != null) {
       setState(() {
-        _warrantyDateController.text = 
+        _warrantyDateController.text =
             "${picked.day.toString().padLeft(2, '0')} / ${picked.month.toString().padLeft(2, '0')} / ${picked.year}";
       });
     }
   }
 
-  // ========== FORM VALIDATION ==========
   String? _validateRequired(String? value, String fieldName) {
     if (!_isValidationEnabled) return null;
     if (value == null || value.trim().isEmpty) {
@@ -163,7 +187,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     if (value == null || value.trim().isEmpty) {
       return 'Item Code is required';
     }
-    // Format: XXX-XXX-XXX (letters and numbers with dashes)
     final regex = RegExp(r'^[A-Z0-9]+-[A-Z0-9]+-[0-9]+$');
     if (!regex.hasMatch(value.toUpperCase())) {
       return 'Format: AAA-BBB-123 (e.g., MAT-CIV-003)';
@@ -191,14 +214,11 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     return null;
   }
 
-  // ========== FORM SUBMISSION ==========
   Future<void> _handleSave() async {
-    // Enable validation on first save attempt
     setState(() {
       _isValidationEnabled = true;
     });
 
-    // Validate form
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -209,87 +229,99 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
       return;
     }
 
-    // Show loading state
     setState(() {
       _isSaving = true;
     });
 
-    // Prepare data for backend
+    final token = await AuthStorage.getToken();
+    if (token != null && token.isNotEmpty) {
+      _apiService.setAuthToken(token);
+    } else {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Authentication required. Please log in again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     final itemData = {
-      'itemName': _itemNameController.text.trim(),
-      'itemCode': _itemCodeController.text.trim().toUpperCase(),
+      'building_id': _buildingId,
+      'item_name': _itemNameController.text.trim(),
+      'item_code': _itemCodeController.text.trim().toUpperCase(),
       'classification': _selectedClassification,
       'department': _selectedDepartment,
-      'brandName': _brandNameController.text.trim().isEmpty 
-          ? '-' 
-          : _brandNameController.text.trim(),
-      'quantityInStock': int.parse(_quantityController.text.trim()),
-      'reorderLevel': int.parse(_reorderLevelController.text.trim()),
+      'brand_name':
+          _brandNameController.text.trim().isEmpty
+              ? '-'
+              : _brandNameController.text.trim(),
+      'current_stock': int.parse(_quantityController.text.trim()),
+      'reorder_level': int.parse(_reorderLevelController.text.trim()),
       'unit': _selectedUnit,
-      'tag': _selectedTag,
-      'supplier': _supplierController.text.trim().isEmpty 
-          ? 'Not Specified' 
-          : _supplierController.text.trim(),
-      'warrantyUntil': _warrantyDateController.text.trim().isEmpty 
-          ? 'DD / MM / YY' 
-          : _warrantyDateController.text.trim(),
-      'dateAdded': DateTime.now().toIso8601String(),
-      'status': _determineStatus(
-        int.parse(_quantityController.text.trim()),
-        int.parse(_reorderLevelController.text.trim()),
-      ),
+      'is_critical': _selectedTag == 'Critical',
+      'supplier':
+          _supplierController.text.trim().isEmpty
+              ? 'Not Specified'
+              : _supplierController.text.trim(),
+      'warranty_until':
+          _warrantyDateController.text.trim().isEmpty
+              ? null
+              : _warrantyDateController.text.trim(),
     };
 
-    // TODO: Backend API call
-    // try {
-    //   final response = await InventoryService.createItem(itemData);
-    //   final createdItemId = response['id']; // Get the ID from backend response
-    //   
-    //   if (mounted) {
-    //     ScaffoldMessenger.of(context).showSnackBar(
-    //       const SnackBar(content: Text('Item created successfully!')),
-    //     );
-    //     // Navigate to the details page with the new item ID
-    //     context.go('/inventory/items/$createdItemId');
-    //   }
-    // } catch (e) {
-    //   if (mounted) {
-    //     ScaffoldMessenger.of(context).showSnackBar(
-    //       SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-    //     );
-    //   }
-    // } finally {
-    //   if (mounted) {
-    //     setState(() {
-    //       _isSaving = false;
-    //     });
-    //   }
-    // }
+    try {
+      final response = await _apiService.createInventoryItem(itemData);
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
-    
-    // Simulate getting an ID from backend (in real app, this comes from API response)
-    final String createdItemId = itemData['itemCode'] as String; // Use item code as ID for now
-    
-    if (mounted) {
-      setState(() {
-        _isSaving = false;
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Item created successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      
-      // Navigate to the details page of the newly created item
-      context.go('/inventory/item/$createdItemId');
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+
+        if (response['success'] == true) {
+          final createdItemId = response['item_id'] ?? itemData['item_code'];
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Item created successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          context.go('/inventory/item/$createdItemId');
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Error: ${response['message'] ?? 'Failed to create item'}',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('[v0] Error creating inventory item: $e');
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
-  // Determine stock status based on quantity
   String _determineStatus(int quantity, int reorderLevel) {
     if (quantity == 0) {
       return 'Out of Stock';
@@ -300,10 +332,9 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     }
   }
 
-  // ========== CANCEL CONFIRMATION ==========
   void _handleCancel() {
-    // Check if form has any data
-    bool hasData = _itemNameController.text.isNotEmpty ||
+    bool hasData =
+        _itemNameController.text.isNotEmpty ||
         _itemCodeController.text.isNotEmpty ||
         _selectedClassification != null ||
         _selectedDepartment != null ||
@@ -321,7 +352,9 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
         builder: (BuildContext context) {
           return AlertDialog(
             title: const Text('Discard Changes?'),
-            content: const Text('Are you sure you want to discard this new item? All entered data will be lost.'),
+            content: const Text(
+              'Are you sure you want to discard this new item? All entered data will be lost.',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -360,13 +393,13 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
         padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
-          autovalidateMode: _isValidationEnabled 
-              ? AutovalidateMode.onUserInteraction 
-              : AutovalidateMode.disabled,
+          autovalidateMode:
+              _isValidationEnabled
+                  ? AutovalidateMode.onUserInteraction
+                  : AutovalidateMode.disabled,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ========== HEADER SECTION ==========
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -382,32 +415,45 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         ),
                       ),
                       const SizedBox(height: 5),
-                      // Breadcrumb navigation
                       Row(
                         children: [
                           TextButton(
                             onPressed: () => context.go('/dashboard'),
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                             ),
                             child: const Text('Dashboard'),
                           ),
-                          const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: Colors.grey,
+                            size: 16,
+                          ),
                           TextButton(
                             onPressed: () => context.go('/inventory/items'),
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                             ),
                             child: const Text('Inventory Management'),
                           ),
-                          const Icon(Icons.chevron_right, color: Colors.grey, size: 16),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: Colors.grey,
+                            size: 16,
+                          ),
                           TextButton(
                             onPressed: null,
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.black,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                             ),
                             child: const Text('Create Item'),
                           ),
@@ -415,7 +461,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                       ),
                     ],
                   ),
-                  // Action buttons
                   Row(
                     children: [
                       OutlinedButton(
@@ -423,7 +468,10 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.grey[700],
                           side: BorderSide(color: Colors.grey[300]!),
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -439,16 +487,19 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                       const SizedBox(width: 12),
                       ElevatedButton.icon(
                         onPressed: _isSaving ? null : _handleSave,
-                        icon: _isSaving 
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                ),
-                              )
-                            : const Icon(Icons.save, size: 18),
+                        icon:
+                            _isSaving
+                                ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                                : const Icon(Icons.save, size: 18),
                         label: Text(
                           _isSaving ? "Saving..." : "Save Item",
                           style: const TextStyle(
@@ -459,7 +510,10 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF1976D2),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 28,
+                            vertical: 18,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -471,7 +525,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
               ),
               const SizedBox(height: 32),
 
-              // ========== FORM CONTAINER ==========
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -489,18 +542,16 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ========== BASIC INFORMATION SECTION ==========
                     _buildSectionHeader(
                       "Basic Information",
                       Icons.info_outline,
                       const Color(0xFF1976D2),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Left Column
                         Expanded(
                           child: Column(
                             children: [
@@ -508,7 +559,9 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                 controller: _itemNameController,
                                 label: "Item Name",
                                 hint: "e.g., Galvanized Screw 3mm",
-                                validator: (value) => _validateRequired(value, 'Item Name'),
+                                validator:
+                                    (value) =>
+                                        _validateRequired(value, 'Item Name'),
                                 isRequired: true,
                               ),
                               const SizedBox(height: 20),
@@ -518,7 +571,8 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                 hint: "e.g., MAT-CIV-003",
                                 validator: _validateItemCode,
                                 isRequired: true,
-                                textCapitalization: TextCapitalization.characters,
+                                textCapitalization:
+                                    TextCapitalization.characters,
                               ),
                               const SizedBox(height: 20),
                               _buildDropdownField(
@@ -530,15 +584,18 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                     _selectedClassification = value;
                                   });
                                 },
-                                validator: (value) => _validateDropdown(value, 'Classification'),
+                                validator:
+                                    (value) => _validateDropdown(
+                                      value,
+                                      'Classification',
+                                    ),
                                 isRequired: true,
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 24),
-                        
-                        // Right Column
+
                         Expanded(
                           child: Column(
                             children: [
@@ -551,7 +608,9 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                     _selectedDepartment = value;
                                   });
                                 },
-                                validator: (value) => _validateDropdown(value, 'Department'),
+                                validator:
+                                    (value) =>
+                                        _validateDropdown(value, 'Department'),
                                 isRequired: true,
                               ),
                               const SizedBox(height: 20),
@@ -571,7 +630,8 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                     _selectedTag = value;
                                   });
                                 },
-                                validator: (value) => _validateDropdown(value, 'Tag'),
+                                validator:
+                                    (value) => _validateDropdown(value, 'Tag'),
                                 isRequired: true,
                               ),
                             ],
@@ -584,18 +644,16 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     const Divider(),
                     const SizedBox(height: 32),
 
-                    // ========== STOCK DETAILS SECTION ==========
                     _buildSectionHeader(
                       "Stock Details",
                       Icons.inventory_2_outlined,
                       const Color(0xFF4CAF50),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Left Column
                         Expanded(
                           child: Column(
                             children: [
@@ -603,10 +661,14 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                 controller: _quantityController,
                                 label: "Quantity in Stock",
                                 hint: "e.g., 150",
-                                validator: (value) => _validateNumber(value, 'Quantity'),
+                                validator:
+                                    (value) =>
+                                        _validateNumber(value, 'Quantity'),
                                 isRequired: true,
                                 keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
                               ),
                               const SizedBox(height: 20),
                               _buildDropdownField(
@@ -618,15 +680,15 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                     _selectedUnit = value;
                                   });
                                 },
-                                validator: (value) => _validateDropdown(value, 'Unit'),
+                                validator:
+                                    (value) => _validateDropdown(value, 'Unit'),
                                 isRequired: true,
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 24),
-                        
-                        // Right Column
+
                         Expanded(
                           child: Column(
                             children: [
@@ -634,10 +696,14 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                                 controller: _reorderLevelController,
                                 label: "Reorder Level",
                                 hint: "e.g., 50",
-                                validator: (value) => _validateNumber(value, 'Reorder Level'),
+                                validator:
+                                    (value) =>
+                                        _validateNumber(value, 'Reorder Level'),
                                 isRequired: true,
                                 keyboardType: TextInputType.number,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
                               ),
                             ],
                           ),
@@ -649,18 +715,16 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                     const Divider(),
                     const SizedBox(height: 32),
 
-                    // ========== SUPPLIER INFORMATION SECTION ==========
                     _buildSectionHeader(
                       "Supplier Information",
                       Icons.local_shipping_outlined,
                       const Color(0xFFFF9800),
                     ),
                     const SizedBox(height: 24),
-                    
+
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Left Column
                         Expanded(
                           child: _buildTextField(
                             controller: _supplierController,
@@ -670,8 +734,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
                           ),
                         ),
                         const SizedBox(width: 24),
-                        
-                        // Right Column
+
                         Expanded(
                           child: _buildDateField(
                             controller: _warrantyDateController,
@@ -693,9 +756,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     );
   }
 
-  // ========== REUSABLE WIDGETS ==========
-
-  // Section Header Widget
   Widget _buildSectionHeader(String title, IconData icon, Color color) {
     return Row(
       children: [
@@ -720,7 +780,6 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
     );
   }
 
-  // Text Field Widget
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
@@ -744,10 +803,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
             ),
             children: [
               if (isRequired)
-                const TextSpan(
-                  text: ' *',
-                  style: TextStyle(color: Colors.red),
-                ),
+                const TextSpan(text: ' *', style: TextStyle(color: Colors.red)),
             ],
           ),
         ),
@@ -783,14 +839,16 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: Colors.red, width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
           ),
         ),
       ],
     );
   }
 
-  // Dropdown Field Widget
   Widget _buildDropdownField({
     required String label,
     required String? value,
@@ -812,16 +870,13 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
             ),
             children: [
               if (isRequired)
-                const TextSpan(
-                  text: ' *',
-                  style: TextStyle(color: Colors.red),
-                ),
+                const TextSpan(text: ' *', style: TextStyle(color: Colors.red)),
             ],
           ),
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           validator: validator,
           decoration: InputDecoration(
             hintText: 'Select $label',
@@ -848,21 +903,21 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: Colors.red, width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
           ),
-          items: items.map((String item) {
-            return DropdownMenuItem<String>(
-              value: item,
-              child: Text(item),
-            );
-          }).toList(),
+          items:
+              items.map((String item) {
+                return DropdownMenuItem<String>(value: item, child: Text(item));
+              }).toList(),
           onChanged: onChanged,
         ),
       ],
     );
   }
 
-  // Date Field Widget
   Widget _buildDateField({
     required TextEditingController controller,
     required String label,
@@ -883,10 +938,7 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
             ),
             children: [
               if (isRequired)
-                const TextSpan(
-                  text: ' *',
-                  style: TextStyle(color: Colors.red),
-                ),
+                const TextSpan(text: ' *', style: TextStyle(color: Colors.red)),
             ],
           ),
         ),
@@ -913,7 +965,10 @@ class _InventoryItemCreatePageState extends State<InventoryItemCreatePage> {
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: Color(0xFF1976D2), width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
           ),
         ),
       ],

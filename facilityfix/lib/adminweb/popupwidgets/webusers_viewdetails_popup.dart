@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../popupwidgets/webforgotpassword_popup.dart';
+import '../services/api_service.dart';
 
 class UserProfileDialog extends StatefulWidget {
   final Map<String, dynamic> user;
 
-  const UserProfileDialog({
-    super.key,
-    required this.user,
-  });
+  const UserProfileDialog({super.key, required this.user});
 
   @override
   State<UserProfileDialog> createState() => _UserProfileDialogState();
@@ -26,57 +25,82 @@ class UserProfileDialog extends StatefulWidget {
 
 class _UserProfileDialogState extends State<UserProfileDialog> {
   bool isEditMode = false;
-  
+  final ApiService _apiService = ApiService();
+
   // Controllers for editable fields
-  late TextEditingController nameController;
+  late TextEditingController firstNameController;
+  late TextEditingController lastNameController;
   late TextEditingController emailController;
-  late TextEditingController contactController;
-  late TextEditingController birthDateController;
+  late TextEditingController phoneController;
   late TextEditingController departmentController;
 
-  bool isNameValid = true;
+  bool isFirstNameValid = true;
+  bool isLastNameValid = true;
   bool isEmailValid = true;
-  bool isContactValid = true;
-  bool isBirthDateValid = true;
+  bool isPhoneValid = true;
   bool isDepartmentValid = true;
 
   bool _validateInputs() {
     setState(() {
-      isNameValid = nameController.text.trim().isNotEmpty;
-      isEmailValid = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-          .hasMatch(emailController.text.trim());
-      isContactValid = contactController.text.trim().isNotEmpty;
-      isBirthDateValid = birthDateController.text.trim().isNotEmpty;
-      isDepartmentValid = departmentController.text.trim().isNotEmpty;
+      isFirstNameValid = firstNameController.text.trim().isNotEmpty;
+      isLastNameValid = lastNameController.text.trim().isNotEmpty;
+      isEmailValid = RegExp(
+        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+      ).hasMatch(emailController.text.trim());
+      isPhoneValid = phoneController.text.trim().isNotEmpty;
+      isDepartmentValid = true; // Department is optional
     });
 
-    return isNameValid &&
-        isEmailValid &&
-        isContactValid &&
-        isBirthDateValid &&
-        isDepartmentValid;
+    return isFirstNameValid && isLastNameValid && isEmailValid && isPhoneValid;
   }
 
   @override
   void initState() {
     super.initState();
-    // Initialize controllers with current user data
-    nameController = TextEditingController(text: widget.user['name'] ?? '');
-    emailController = TextEditingController(text: widget.user['email'] ?? '');
-    contactController = TextEditingController(text: widget.user['contactNumber'] ?? '');
-    birthDateController = TextEditingController(text: widget.user['birthDate'] ?? '');
-    departmentController = TextEditingController(text: widget.user['department'] ?? '');
+    final rawUser = widget.user['_raw'] ?? {};
+    firstNameController = TextEditingController(
+      text: rawUser['first_name'] ?? '',
+    );
+    lastNameController = TextEditingController(
+      text: rawUser['last_name'] ?? '',
+    );
+    emailController = TextEditingController(
+      text: rawUser['email'] ?? widget.user['email'] ?? '',
+    );
+    phoneController = TextEditingController(
+      text: rawUser['phone_number'] ?? '',
+    );
+    departmentController = TextEditingController(
+      text: rawUser['department'] ?? widget.user['department'] ?? '',
+    );
   }
 
   @override
   void dispose() {
     // Dispose controllers to prevent memory leaks
-    nameController.dispose();
+    firstNameController.dispose();
+    lastNameController.dispose();
     emailController.dispose();
-    contactController.dispose();
-    birthDateController.dispose();
+    phoneController.dispose();
     departmentController.dispose();
     super.dispose();
+  }
+
+  String _getUserIdLabel() {
+    final role = widget.user['role'] ?? 'Tenant';
+    switch (role.toLowerCase()) {
+      case 'admin':
+        return 'Admin ID';
+      case 'staff':
+        return 'Staff ID';
+      case 'tenant':
+      default:
+        return 'Tenant ID';
+    }
+  }
+
+  String _getUserId() {
+    return widget.user['id'] ?? widget.user['_raw']?['user_id'] ?? 'N/A';
   }
 
   @override
@@ -86,10 +110,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       insetPadding: const EdgeInsets.all(20),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.6,
-        constraints: const BoxConstraints(
-          maxWidth: 700,
-          maxHeight: 700,
-        ),
+        constraints: const BoxConstraints(maxWidth: 700, maxHeight: 700),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -123,8 +144,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
                     _buildNameSection(),
                     const SizedBox(height: 8),
 
-                    // Staff ID Section (Read-only)
-                    _buildStaffIdSection(),
+                    _buildUserIdSection(),
                     const SizedBox(height: 32),
 
                     // Personal Details Section
@@ -142,7 +162,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
 
-  // Header with title, edit toggle, and close button
+  // Header with title, edit toggle, delete, and close button
   Widget _buildHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.only(left: 32, right: 24, top: 24, bottom: 16),
@@ -157,6 +177,17 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             ),
           ),
           const Spacer(),
+          if (!isEditMode)
+            IconButton(
+              onPressed: () => _deleteUser(context),
+              icon: Icon(
+                Icons.delete_outline,
+                color: Colors.red[600],
+                size: 24,
+              ),
+              tooltip: 'Delete User',
+            ),
+          const SizedBox(width: 8),
           // Edit toggle button
           IconButton(
             onPressed: () => _toggleEditMode(),
@@ -171,11 +202,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           // Close button
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(
-              Icons.close,
-              color: Colors.grey,
-              size: 24,
-            ),
+            icon: const Icon(Icons.close, color: Colors.grey, size: 24),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
           ),
@@ -193,24 +220,19 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           height: 120,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.blue[200]!,
-              width: 3,
-            ),
+            border: Border.all(color: Colors.blue[200]!, width: 3),
           ),
           child: CircleAvatar(
             radius: 58,
             backgroundColor: Colors.grey[100],
-            backgroundImage: widget.user['profileImage'] != null
-                ? NetworkImage(widget.user['profileImage'])
-                : null,
-            child: widget.user['profileImage'] == null
-                ? Icon(
-                    Icons.person,
-                    size: 60,
-                    color: Colors.grey[400],
-                  )
-                : null,
+            backgroundImage:
+                widget.user['profileImage'] != null
+                    ? NetworkImage(widget.user['profileImage'])
+                    : null,
+            child:
+                widget.user['profileImage'] == null
+                    ? Icon(Icons.person, size: 60, color: Colors.grey[400])
+                    : null,
           ),
         ),
         if (isEditMode)
@@ -240,43 +262,78 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
 
-  // Name section with editing capability
   Widget _buildNameSection() {
     return isEditMode
-        ? SizedBox(
-            width: 300,
-            child: TextFormField(
-              controller: nameController,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-              decoration: const InputDecoration(
-                hintText: 'Enter name',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+        ? Column(
+          children: [
+            SizedBox(
+              width: 300,
+              child: TextFormField(
+                controller: firstNameController,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
                 ),
+                decoration: InputDecoration(
+                  hintText: 'First Name',
+                  border: const OutlineInputBorder(),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  errorText: !isFirstNameValid ? 'Required' : null,
+                ),
+                onChanged: (val) {
+                  setState(() {
+                    isFirstNameValid = val.trim().isNotEmpty;
+                  });
+                },
               ),
             ),
-          )
-        : Text(
-            widget.user['name'] ?? 'No Name',
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 300,
+              child: TextFormField(
+                controller: lastNameController,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Last Name',
+                  border: const OutlineInputBorder(),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  errorText: !isLastNameValid ? 'Required' : null,
+                ),
+                onChanged: (val) {
+                  setState(() {
+                    isLastNameValid = val.trim().isNotEmpty;
+                  });
+                },
+              ),
             ),
-          );
+          ],
+        )
+        : Text(
+          widget.user['name'] ?? 'No Name',
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        );
   }
 
-  // Staff ID section (always read-only)
-  Widget _buildStaffIdSection() {
+  Widget _buildUserIdSection() {
     return Text(
-      'Staff ID: ${widget.user['staffId'] ?? 'N/A'}',
+      '${_getUserIdLabel()}: ${_getUserId()}',
       style: TextStyle(
         fontSize: 16,
         color: Colors.grey[600],
@@ -285,8 +342,9 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
 
-  // Personal details section with all editable fields
   Widget _buildPersonalDetailsSection() {
+    final rawUser = widget.user['_raw'] ?? {};
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -322,39 +380,55 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           ),
           const SizedBox(height: 24),
 
-          // Birth Date field
-          _buildDetailField(
-            'Birth Date',
-            birthDateController,
-            widget.user['birthDate'] ?? 'Not specified',
-            isDate: true,
-          ),
-          const SizedBox(height: 20),
-
-          // Staff Department field
-          _buildDetailField(
-            'Staff Department',
-            departmentController,
-            widget.user['department'] ?? 'Not specified',
-          ),
-          const SizedBox(height: 20),
-
           // Email field
           _buildDetailField(
             'Email',
             emailController,
-            widget.user['email'] ?? 'Not specified',
+            rawUser['email'] ?? widget.user['email'] ?? 'Not specified',
             keyboardType: TextInputType.emailAddress,
+            isValid: isEmailValid,
+            onChanged: (val) {
+              setState(() {
+                isEmailValid = RegExp(
+                  r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                ).hasMatch(val);
+              });
+            },
           ),
           const SizedBox(height: 20),
 
-          // Contact Number field
+          // Phone Number field
           _buildDetailField(
-            'Contact Number',
-            contactController,
-            widget.user['contactNumber'] ?? 'Not specified',
+            'Phone Number',
+            phoneController,
+            rawUser['phone_number'] ?? 'Not specified',
             keyboardType: TextInputType.phone,
+            isValid: isPhoneValid,
+            onChanged: (val) {
+              setState(() {
+                isPhoneValid = val.trim().isNotEmpty;
+              });
+            },
           ),
+          const SizedBox(height: 20),
+
+          // Department field
+          _buildDetailField(
+            'Department',
+            departmentController,
+            rawUser['department'] ??
+                widget.user['department'] ??
+                'Not specified',
+            isValid: isDepartmentValid,
+          ),
+          const SizedBox(height: 20),
+
+          // Role (read-only)
+          _buildReadOnlyField('Role', widget.user['role'] ?? 'Tenant'),
+          const SizedBox(height: 20),
+
+          // Status (read-only)
+          _buildReadOnlyField('Status', widget.user['status'] ?? 'Offline'),
           const SizedBox(height: 24),
 
           // Forgot Password link
@@ -364,35 +438,15 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
 
-  // Individual detail field with edit/view modes
   Widget _buildDetailField(
     String label,
     TextEditingController controller,
     String displayValue, {
     bool isDate = false,
     TextInputType? keyboardType,
+    required bool isValid,
+    Function(String)? onChanged,
   }) {
-    // Pick the right validation flag for this field
-    bool isValid = true;
-    Function(bool)? setValid;
-
-    if (label == "Email") {
-      isValid = isEmailValid;
-      setValid = (v) => isEmailValid = v;
-    } else if (label == "Contact Number") {
-      isValid = isContactValid;
-      setValid = (v) => isContactValid = v;
-    } else if (label == "Birth Date") {
-      isValid = isBirthDateValid;
-      setValid = (v) => isBirthDateValid = v;
-    } else if (label == "Staff Department") {
-      isValid = isDepartmentValid;
-      setValid = (v) => isDepartmentValid = v;
-    } else if (label == "Name") {
-      isValid = isNameValid;
-      setValid = (v) => isNameValid = v;
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -412,19 +466,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             keyboardType: keyboardType,
             readOnly: isDate,
             onTap: isDate ? () => _selectDate(controller) : null,
-            onChanged: (val) {
-              if (setValid != null) {
-                if (val.trim().isEmpty) {
-                  setValid(false);
-                } else if (label == "Email") {
-                  setValid(RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                      .hasMatch(val));
-                } else {
-                  setValid(true);
-                }
-                setState(() {});
-              }
-            },
+            onChanged: onChanged,
             decoration: InputDecoration(
               hintText: 'Enter $label',
               border: OutlineInputBorder(
@@ -447,9 +489,8 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
                 horizontal: 12,
                 vertical: 10,
               ),
-              suffixIcon: isDate
-                  ? const Icon(Icons.calendar_today, size: 20)
-                  : null,
+              suffixIcon:
+                  isDate ? const Icon(Icons.calendar_today, size: 20) : null,
             ),
             style: const TextStyle(
               fontSize: 16,
@@ -482,6 +523,35 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     );
   }
 
+  Widget _buildReadOnlyField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[600],
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   // Forgot password section
   Widget _buildForgotPasswordSection() {
@@ -495,11 +565,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.lock_outline,
-            color: Colors.blue[600],
-            size: 20,
-          ),
+          Icon(Icons.lock_outline, color: Colors.blue[600], size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -517,7 +583,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
                 GestureDetector(
                   onTap: () => _forgotPassword(),
                   child: Text(
-                    'Forgot password?',
+                    'Reset password',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.blue[600],
@@ -539,9 +605,7 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.grey[300]!, width: 1),
-        ),
+        border: Border(top: BorderSide(color: Colors.grey[300]!, width: 1)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
@@ -611,18 +675,26 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
 
   // Cancel editing and revert changes
   void _cancelEdit() {
+    final rawUser = widget.user['_raw'] ?? {};
     setState(() {
       isEditMode = false;
       // Reset controllers to original values
-      nameController.text = widget.user['name'] ?? '';
-      emailController.text = widget.user['email'] ?? '';
-      contactController.text = widget.user['contactNumber'] ?? '';
-      birthDateController.text = widget.user['birthDate'] ?? '';
-      departmentController.text = widget.user['department'] ?? '';
+      firstNameController.text = rawUser['first_name'] ?? '';
+      lastNameController.text = rawUser['last_name'] ?? '';
+      emailController.text = rawUser['email'] ?? widget.user['email'] ?? '';
+      phoneController.text = rawUser['phone_number'] ?? '';
+      departmentController.text =
+          rawUser['department'] ?? widget.user['department'] ?? '';
+
+      // Reset validation flags
+      isFirstNameValid = true;
+      isLastNameValid = true;
+      isEmailValid = true;
+      isPhoneValid = true;
+      isDepartmentValid = true;
     });
   }
 
-  // Save changes to backend
   void _saveChanges() async {
     // Validate first
     if (!_validateInputs()) {
@@ -632,22 +704,37 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
           backgroundColor: Colors.red,
         ),
       );
-      return; 
+      return;
     }
 
     try {
-      Map<String, dynamic> updatedUser = {
-        'id': widget.user['id'],
-        'staffId': widget.user['staffId'],
-        'name': nameController.text.trim(),
+      final userId = widget.user['id'];
+
+      Map<String, dynamic> updateData = {
+        'first_name': firstNameController.text.trim(),
+        'last_name': lastNameController.text.trim(),
         'email': emailController.text.trim(),
-        'contactNumber': contactController.text.trim(),
-        'birthDate': birthDateController.text.trim(),
+        'phone_number': phoneController.text.trim(),
         'department': departmentController.text.trim(),
-        'profileImage': widget.user['profileImage'],
       };
 
-      await _updateUserProfile(updatedUser);
+      print('[v0] Updating user $userId with data: $updateData');
+
+      await _apiService.updateUser(userId, updateData);
+
+      // Update local user data
+      widget.user['name'] =
+          '${firstNameController.text.trim()} ${lastNameController.text.trim()}';
+      widget.user['email'] = emailController.text.trim();
+      widget.user['department'] = departmentController.text.trim();
+
+      if (widget.user['_raw'] != null) {
+        widget.user['_raw']['first_name'] = firstNameController.text.trim();
+        widget.user['_raw']['last_name'] = lastNameController.text.trim();
+        widget.user['_raw']['email'] = emailController.text.trim();
+        widget.user['_raw']['phone_number'] = phoneController.text.trim();
+        widget.user['_raw']['department'] = departmentController.text.trim();
+      }
 
       setState(() {
         isEditMode = false;
@@ -660,12 +747,69 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
             backgroundColor: Colors.green,
           ),
         );
+
+        // Close dialog and refresh parent page
+        Navigator.of(context).pop();
       }
     } catch (e) {
+      print('[v0] Error updating profile: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error updating profile: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _deleteUser(BuildContext context) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Confirm Delete'),
+          content: Text(
+            'Are you sure you want to delete ${widget.user['name']}? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final userId = widget.user['id'];
+      print('[v0] Deleting user $userId');
+
+      await _apiService.deleteUser(userId, permanent: false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Deleted user: ${widget.user['name']}")),
+        );
+
+        // Close dialog and refresh parent page
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      print('[v0] Error deleting user: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to delete user: $e"),
             backgroundColor: Colors.red,
           ),
         );
@@ -681,15 +825,15 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
       firstDate: DateTime(1950),
       lastDate: DateTime.now(),
     );
-    
+
     if (picked != null) {
-      controller.text = "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
+      controller.text =
+          "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
     }
   }
 
   // Change profile image
   void _changeProfileImage() {
-    // TODO: Implement image picker functionality
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Profile image change coming soon...'),
@@ -701,27 +845,5 @@ class _UserProfileDialogState extends State<UserProfileDialog> {
   // Forgot password handler
   void _forgotPassword() {
     ForgotPasswordDialog.show(context);
-  }
-
-  // Backend API methods (implement these according to your backend)
-
-  // Update user profile in backend
-  Future<void> _updateUserProfile(Map<String, dynamic> updatedUser) async {
-    // TODO: Implement API call to update user profile
-    try {
-      // Example API call structure:
-      // await UserService.updateProfile(updatedUser);
-      print('Updating user profile: $updatedUser');
-      
-      // Simulate API delay
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Update the original user data for display
-      widget.user.addAll(updatedUser);
-      
-    } catch (e) {
-      print('Error updating user profile: $e');
-      rethrow;
-    }
   }
 }

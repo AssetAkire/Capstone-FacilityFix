@@ -94,54 +94,23 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   late Map<String, String> _original;
 
   // Sample checklist (view-only for now)
-  final List<Map<String, dynamic>> _checklistItems = [
-    {'text': 'Visually inspect light conditions', 'completed': false},
-    {'text': 'Test Switch Function', 'completed': false},
-    {'text': 'Check emergency Lights', 'completed': false},
-    {'text': 'Replace burn-out burns', 'completed': false},
-    {'text': 'Log condition and report anomalies', 'completed': false},
-  ];
+  final List<Map<String, dynamic>> _checklistItems = [];
 
   // ------------------------ Init/Dispose ------------------------
   @override
   void initState() {
     super.initState();
 
-    // Defaults expected by this page
-    final defaults = <String, dynamic>{
-      'department': 'General maintenance',
-      'createdBy': 'Michelle Reyes',
-      'estimatedDuration': '3 hrs',
-      'location': 'Basement',
-      'description': 'Inspecting all ceiling lights and emergency lighting.',
-      'recurrence': 'Every 1 month',
-      'startDate': '2025-07-30',
-      'nextDueDate': '2025-07-08',
-      'assigneeName': 'Ronaldo Cruz',
-      'assigneeDept': 'General maintenance',
-      'taskTitle': 'Light Inspection',
-      'taskCode': widget.taskId,
-      // Notifications defaults (show in card + editable)
-      'adminNotify': '1 week before, 3 days before, 1 day before',
-      'staffNotify': '3 days before, 1 day before',
-      // Header chips (view-only)
-      'tags': <String>['High-Turnover', 'Repair-Prone'],
-    };
-
-    // Merge incoming data with defaults (incoming wins)
-    final Map<String, dynamic> seed = {
-      ...defaults,
-      ...?widget.initialTask,
-    };
+    final Map<String, dynamic> seed = widget.initialTask ?? {};
 
     // Safe setter
     void setText(TextEditingController c, String key) {
       c.text = (seed[key]?.toString() ?? '');
     }
 
-    // Assign
-    setText(_departmentCtrl, 'department');
-    setText(_createdByCtrl, 'createdBy');
+    // Assign from incoming data
+    setText(_departmentCtrl, 'assigneeDept');
+    setText(_createdByCtrl, 'assigneeName');
     setText(_estimatedDurationCtrl, 'estimatedDuration');
     setText(_locationCtrl, 'location');
     setText(_descriptionCtrl, 'description');
@@ -153,11 +122,22 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     setText(_adminNotifyCtrl, 'adminNotify');
     setText(_staffNotifyCtrl, 'staffNotify');
 
+    if (seed['checklistItems'] != null && seed['checklistItems'] is List) {
+      _checklistItems.clear();
+      for (var item in seed['checklistItems']) {
+        _checklistItems.add({
+          'text': item['task'] ?? '',
+          'completed': item['completed'] ?? false,
+        });
+      }
+    }
+
     // Tags
     final dynamic t = seed['tags'];
-    _tags = (t is List)
-        ? t.map((e) => e.toString()).toList()
-        : <String>['High-Turnover', 'Repair-Prone'];
+    _tags =
+        (t is List)
+            ? t.map((e) => e.toString()).toList()
+            : <String>['High-Turnover', 'Repair-Prone'];
 
     _original = _takeSnapshot();
     _isEditMode = widget.startInEditMode;
@@ -182,19 +162,19 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   // ------------------------ Snapshot & Handlers ------------------------
   Map<String, String> _takeSnapshot() => {
-        'department': _departmentCtrl.text,
-        'createdBy': _createdByCtrl.text,
-        'estimatedDuration': _estimatedDurationCtrl.text,
-        'location': _locationCtrl.text,
-        'description': _descriptionCtrl.text,
-        'recurrence': _recurrenceCtrl.text,
-        'startDate': _startDateCtrl.text,
-        'nextDueDate': _nextDueCtrl.text,
-        'assigneeName': _assigneeNameCtrl.text,
-        'assigneeDept': _assigneeDeptCtrl.text,
-        'adminNotify': _adminNotifyCtrl.text,
-        'staffNotify': _staffNotifyCtrl.text,
-      };
+    'department': _departmentCtrl.text,
+    'createdBy': _createdByCtrl.text,
+    'estimatedDuration': _estimatedDurationCtrl.text,
+    'location': _locationCtrl.text,
+    'description': _descriptionCtrl.text,
+    'recurrence': _recurrenceCtrl.text,
+    'startDate': _startDateCtrl.text,
+    'nextDueDate': _nextDueCtrl.text,
+    'assigneeName': _assigneeNameCtrl.text,
+    'assigneeDept': _assigneeDeptCtrl.text,
+    'adminNotify': _adminNotifyCtrl.text,
+    'staffNotify': _staffNotifyCtrl.text,
+  };
 
   void _enterEditMode() => setState(() => _isEditMode = true);
 
@@ -222,14 +202,33 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       );
       return;
     }
-    // TODO: Persist to backend
-    // await api.updateInternalTask(widget.taskId, _takeSnapshot());
 
-    _original = _takeSnapshot(); // update baseline
-    setState(() => _isEditMode = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Task saved.'), backgroundColor: Colors.green),
-    );
+    try {
+      final updateData = _takeSnapshot();
+      print('[v0] Updating maintenance task: ${widget.taskId}');
+
+      // TODO: Call API to update the task
+      // await _apiService.updateMaintenanceTask(widget.taskId, updateData);
+
+      _original = _takeSnapshot(); // update baseline
+      setState(() => _isEditMode = false);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Task saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('[v0] Error saving task: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save task: $e')));
+      }
+    }
   }
 
   // ------------------------ Validators (real-time) ------------------------
@@ -238,9 +237,10 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   String? _durationValidator(String? v) {
     if (v == null || v.trim().isEmpty) return 'Required';
-    final ok = RegExp(r'^\d+\s*(hr|hrs|hour|hours|min|mins|minutes)$',
-            caseSensitive: false)
-        .hasMatch(v.trim());
+    final ok = RegExp(
+      r'^\d+\s*(hr|hrs|hour|hours|min|mins|minutes)$',
+      caseSensitive: false,
+    ).hasMatch(v.trim());
     return ok ? null : 'Use formats like "3 hrs" or "45 mins"';
   }
 
@@ -254,7 +254,10 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
   String? _notifyValidator(String? v) {
     if (v == null || v.trim().isEmpty) return 'Required';
     final parts = v.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty);
-    final re = RegExp(r'^\d+\s*(day|days|week|weeks)\s+before$', caseSensitive: false);
+    final re = RegExp(
+      r'^\d+\s*(day|days|week|weeks)\s+before$',
+      caseSensitive: false,
+    );
     for (final p in parts) {
       if (!re.hasMatch(p)) {
         return 'Use entries like "1 week before" or "3 days before", comma-separated';
@@ -317,9 +320,10 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              "Light Inspection",
-                              style: TextStyle(
+                            Text(
+                              widget.initialTask?['taskTitle'] ??
+                                  "Light Inspection",
+                              style: const TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black87,
@@ -347,9 +351,9 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            _buildTaskTags(),        
+                            _buildTaskTags(),
                             const SizedBox(height: 8),
-                            
+                            _buildBottomActionBar(),
                           ],
                         ),
                       ],
@@ -389,7 +393,6 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                               const SizedBox(height: 24),
                               _buildNotificationsCard(),
                               const SizedBox(height: 24),
-                              _buildBottomActionBar(),
                             ],
                           ),
                         ),
@@ -407,6 +410,12 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
   // ------------------------ Header (breadcrumbs only) ------------------------
   Widget _buildHeaderSection() {
+    final taskTitle = widget.initialTask?['taskTitle'] ?? 'Light Inspection';
+    final assignedTo =
+        _assigneeNameCtrl.text.isNotEmpty
+            ? _assigneeNameCtrl.text
+            : 'Unassigned';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -447,7 +456,6 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
               ),
               child: const Text('Maintenance Tasks'),
             ),
-            
           ],
         ),
       ],
@@ -459,16 +467,27 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: _tags.map((t) {
-        final isPrimary = t.toLowerCase().contains('high');
-        final bg = isPrimary ? const Color(0xFFE8F5E8) : Colors.grey[100]!;
-        final fg = isPrimary ? const Color(0xFF2E7D2E) : Colors.grey[700]!;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(16)),
-          child: Text(t, style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w500)),
-        );
-      }).toList(),
+      children:
+          _tags.map((t) {
+            final isPrimary = t.toLowerCase().contains('high');
+            final bg = isPrimary ? const Color(0xFFE8F5E8) : Colors.grey[100]!;
+            final fg = isPrimary ? const Color(0xFF2E7D2E) : Colors.grey[700]!;
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                t,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            );
+          }).toList(),
     );
   }
 
@@ -483,15 +502,25 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Color(0xFF1976D2), size: 20),
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Color(0xFF1976D2),
+            size: 20,
+          ),
           const SizedBox(width: 12),
           const Text(
             "Tasks Scheduled",
-            style: TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.w600, fontSize: 14),
+            style: TextStyle(
+              color: Color(0xFF1976D2),
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
           ),
           const SizedBox(width: 8),
           Text(
-            nextDue.isEmpty ? "Next service date not set" : "Next Service: $nextDue",
+            nextDue.isEmpty
+                ? "Next service date not set"
+                : "Next Service: $nextDue",
             style: TextStyle(color: Colors.grey[700], fontSize: 14),
           ),
         ],
@@ -525,28 +554,28 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
 
     // EDIT MODE: Cancel + Save (right aligned)
     return Row(
-    mainAxisAlignment: MainAxisAlignment.end,
-    children: [
-      OutlinedButton(
-        onPressed: _cancelEdit,
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        OutlinedButton(
+          onPressed: _cancelEdit,
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          ),
+          child: const Text('Cancel'),
         ),
-        child: const Text('Cancel'),
-      ),
-      const SizedBox(width: 8),
-      ElevatedButton.icon(
-        onPressed: _saveEdit,
-        icon: const Icon(Icons.save_outlined, size: 18),
-        label: const Text('Save'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF2E7D32),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        const SizedBox(width: 8),
+        ElevatedButton.icon(
+          onPressed: _saveEdit,
+          icon: const Icon(Icons.save_outlined, size: 18),
+          label: const Text('Save'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2E7D32),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          ),
         ),
-      ),
-    ],
-  );
+      ],
+    );
   }
 
   // ------------------------ Cards (some editable) ------------------------
@@ -560,27 +589,43 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         children: [
           _editableRow('Department', _departmentCtrl, validator: _req),
           _editableRow('Created By', _createdByCtrl, validator: _req),
-          _editableRow('Estimated Duration', _estimatedDurationCtrl,
-              validator: _durationValidator, hint: 'e.g., 3 hrs, 45 mins'),
+          _editableRow(
+            'Estimated Duration',
+            _estimatedDurationCtrl,
+            validator: _durationValidator,
+            hint: 'e.g., 3 hrs, 45 mins',
+          ),
           _editableRow('Location / Area', _locationCtrl, validator: _req),
           const SizedBox(height: 16),
-          Text('Task Description',
-              style: TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500)),
+          Text(
+            'Task Description',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           const SizedBox(height: 8),
           _isEditMode
               ? TextFormField(
-                  controller: _descriptionCtrl,
-                  minLines: 3,
-                  maxLines: 6,
-                  validator: _req,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                    hintText: 'Describe the work to be done...',
-                  ),
-                )
-              : Text(_descriptionCtrl.text,
-                  style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.5)),
+                controller: _descriptionCtrl,
+                minLines: 3,
+                maxLines: 6,
+                validator: _req,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  hintText: 'Describe the work to be done...',
+                ),
+              )
+              : Text(
+                _descriptionCtrl.text,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                  height: 1.5,
+                ),
+              ),
         ],
       ),
     );
@@ -593,9 +638,25 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       title: 'Schedule',
       child: Column(
         children: [
-          _editableRow('Recurrence', _recurrenceCtrl, validator: _req, hint: 'e.g., Every 1 month'),
-          _editableRow('Start Date', _startDateCtrl, validator: _dateValidator, hint: 'YYYY-MM-DD'),
-          _editableRow('Next Due Date', _nextDueCtrl, validator: _dateValidator, hint: 'YYYY-MM-DD', highlight: true),
+          _editableRow(
+            'Recurrence',
+            _recurrenceCtrl,
+            validator: _req,
+            hint: 'e.g., Every 1 month',
+          ),
+          _editableRow(
+            'Start Date',
+            _startDateCtrl,
+            validator: _dateValidator,
+            hint: 'YYYY-MM-DD',
+          ),
+          _editableRow(
+            'Next Due Date',
+            _nextDueCtrl,
+            validator: _dateValidator,
+            hint: 'YYYY-MM-DD',
+            highlight: true,
+          ),
         ],
       ),
     );
@@ -611,16 +672,33 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(color: Colors.grey[300], shape: BoxShape.circle),
-            child: Icon(Icons.person_outline, color: Colors.grey[600], size: 20),
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.person_outline,
+              color: Colors.grey[600],
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _editableRow('Assignee Name', _assigneeNameCtrl, validator: _req, compact: true),
-                _editableRow('Department', _assigneeDeptCtrl, validator: _req, compact: true),
+                _editableRow(
+                  'Assignee Name',
+                  _assigneeNameCtrl,
+                  validator: _req,
+                  compact: true,
+                ),
+                _editableRow(
+                  'Department',
+                  _assigneeDeptCtrl,
+                  validator: _req,
+                  compact: true,
+                ),
               ],
             ),
           ),
@@ -629,33 +707,50 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     );
   }
 
-  // View-only cards (left as-is)
   Widget _buildChecklistCard() {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFFF9800)),
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3E0),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFFF9800)),
+                ),
+                child: const Icon(
+                  Icons.checklist,
+                  color: Color(0xFFFF9800),
+                  size: 16,
+                ),
               ),
-              child: const Icon(Icons.checklist, color: Color(0xFFFF9800), size: 16),
-            ),
-            const SizedBox(width: 12),
-            const Text("Checklist / Task Steps",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87)),
-          ]),
+              const SizedBox(width: 12),
+              const Text(
+                "Checklist / Task Steps",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
           ...(_checklistItems.asMap().entries.map((entry) {
             return Padding(
@@ -669,9 +764,14 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                       border: Border.all(color: Colors.grey[400]!, width: 2),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: entry.value['completed']
-                        ? const Icon(Icons.check, size: 14, color: Colors.green)
-                        : null,
+                    child:
+                        entry.value['completed']
+                            ? const Icon(
+                              Icons.check,
+                              size: 14,
+                              color: Colors.green,
+                            )
+                            : null,
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -679,8 +779,14 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                       entry.value['text'],
                       style: TextStyle(
                         fontSize: 14,
-                        color: entry.value['completed'] ? Colors.grey[500] : Colors.black87,
-                        decoration: entry.value['completed'] ? TextDecoration.lineThrough : null,
+                        color:
+                            entry.value['completed']
+                                ? Colors.grey[500]
+                                : Colors.black87,
+                        decoration:
+                            entry.value['completed']
+                                ? TextDecoration.lineThrough
+                                : null,
                       ),
                     ),
                   ),
@@ -698,23 +804,44 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: const BoxDecoration(color: Color(0xFFE8F5E8), shape: BoxShape.circle),
-              child: const Icon(Icons.comment, color: Color(0xFF2E7D2E), size: 16),
-            ),
-            const SizedBox(width: 12),
-            const Text("Admin Notes",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87)),
-          ]),
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE8F5E8),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.comment,
+                  color: Color(0xFF2E7D2E),
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                "Admin Notes",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(16),
@@ -731,7 +858,11 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                 Expanded(
                   child: Text(
                     "Emergency lights in basement often have moisture issues - check battery backups.",
-                    style: TextStyle(fontSize: 14, color: Colors.blue[800], height: 1.4),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.blue[800],
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ],
@@ -747,23 +878,44 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
-              width: 32,
-              height: 32,
-              decoration: const BoxDecoration(color: Color(0xFFE3F2FD), shape: BoxShape.circle),
-              child: const Icon(Icons.attach_file, color: Color(0xFF1976D2), size: 16),
-            ),
-            const SizedBox(width: 12),
-            const Text("Attachments",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87)),
-          ]),
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFE3F2FD),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.attach_file,
+                  color: Color(0xFF1976D2),
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                "Attachments",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.all(12),
@@ -777,8 +929,10 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                 Container(
                   width: 32,
                   height: 32,
-                  decoration:
-                      BoxDecoration(color: const Color(0xFF4CAF50), borderRadius: BorderRadius.circular(6)),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                   child: const Icon(Icons.image, color: Colors.white, size: 16),
                 ),
                 const SizedBox(width: 12),
@@ -786,9 +940,18 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("basement-lights-before.jpg",
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87)),
-                      Text("Image File", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                      const Text(
+                        "basement-lights-before.jpg",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      Text(
+                        "Image File",
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
                     ],
                   ),
                 ),
@@ -838,18 +1001,47 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(width: 32, height: 32, decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
-              child: Icon(icon, color: iconBg.computeLuminance() > 0.5 ? Colors.black : Colors.white, size: 16)),
-            const SizedBox(width: 12),
-            Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.black87)),
-          ]),
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color:
+                      iconBg.computeLuminance() > 0.5
+                          ? Colors.black
+                          : Colors.white,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           child,
         ],
@@ -866,7 +1058,11 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
     bool highlight = false,
     bool compact = false,
   }) {
-    final labelStyle = TextStyle(fontSize: 14, color: Colors.grey[600], fontWeight: FontWeight.w500);
+    final labelStyle = TextStyle(
+      fontSize: 14,
+      color: Colors.grey[600],
+      fontWeight: FontWeight.w500,
+    );
     final valueStyle = TextStyle(
       fontSize: 14,
       color: highlight ? Colors.red[600] : Colors.black87,
@@ -880,19 +1076,20 @@ class _InternalTaskViewPageState extends State<InternalTaskViewPage> {
         children: [
           SizedBox(width: 160, child: Text(label, style: labelStyle)),
           Expanded(
-            child: _isEditMode
-                ? TextFormField(
-                    controller: controller,
-                    validator: validator,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      hintText: hint,
-                      border: const OutlineInputBorder(),
-                      errorMaxLines: 2,
-                    ),
-                  )
-                : Text(controller.text, style: valueStyle),
+            child:
+                _isEditMode
+                    ? TextFormField(
+                      controller: controller,
+                      validator: validator,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: hint,
+                        border: const OutlineInputBorder(),
+                        errorMaxLines: 2,
+                      ),
+                    )
+                    : Text(controller.text, style: valueStyle),
           ),
         ],
       ),
