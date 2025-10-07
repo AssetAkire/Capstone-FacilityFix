@@ -32,6 +32,58 @@ class UserSearchFilters(BaseModel):
     status: Optional[str] = None
     department: Optional[str] = None
 
+@router.get("/staff", response_model=List[dict])
+async def get_staff_members(
+    department: Optional[str] = Query(None, description="Filter by department"),
+    available_only: bool = Query(False, description="Only return available staff"),
+    current_user: dict = Depends(require_staff_or_admin)
+):
+    """Get all staff members with optional filtering"""
+    try:
+        # Build filters to get staff members
+        filters = [('role', '==', 'staff')]
+        
+        if department:
+            filters.append(('staff_department', '==', department))
+        
+        if available_only:
+            filters.append(('status', '==', 'active'))
+        
+        # Query staff from Firestore
+        success, staff_members, error = await database_service.query_documents(
+            COLLECTIONS['users'], 
+            filters=filters
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve staff members: {error}"
+            )
+        
+        # Format staff data for frontend
+        formatted_staff = []
+        for staff in staff_members:
+            formatted_staff.append({
+                "id": staff.get("id") or staff.get("_doc_id"),
+                "user_id": staff.get("user_id"),
+                "first_name": staff.get("first_name", ""),
+                "last_name": staff.get("last_name", ""),
+                "email": staff.get("email", ""),
+                "staff_department": staff.get("staff_department") or staff.get("department"),
+                "phone_number": staff.get("phone_number", ""),
+                "status": staff.get("status", "active"),
+                "building_id": staff.get("building_id"),
+            })
+        
+        return formatted_staff
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error retrieving staff members: {str(e)}"
+        )
+
 @router.get("/", response_model=List[dict])
 async def get_users(
     role: Optional[str] = Query(None, description="Filter by user role"),
@@ -401,55 +453,6 @@ async def change_user_password(
             detail=f"Failed to update password: {str(e)}"
         )
 
-@router.get("/stats/overview")
-async def get_user_statistics(
-    current_user: dict = Depends(require_admin)
-):
-    """Get user statistics overview"""
-    try:
-        # Get all users
-        success, all_users, error = await database_service.query_collection(COLLECTIONS['users'])
-        
-        if not success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to retrieve user statistics: {error}"
-            )
-        
-        # Calculate statistics
-        total_users = len(all_users)
-        role_counts = {}
-        status_counts = {}
-        building_counts = {}
-        
-        for user in all_users:
-            # Count by role
-            role = user.get('role', 'unknown')
-            role_counts[role] = role_counts.get(role, 0) + 1
-            
-            # Count by status
-            status = user.get('status', 'unknown')
-            status_counts[status] = status_counts.get(status, 0) + 1
-            
-            # Count by building
-            building_id = user.get('building_id', 'unassigned')
-            building_counts[building_id] = building_counts.get(building_id, 0) + 1
-        
-        return {
-            "total_users": total_users,
-            "by_role": role_counts,
-            "by_status": status_counts,
-            "by_building": building_counts
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving user statistics: {str(e)}"
-        )
-
 @router.post("/bulk/status")
 async def bulk_update_user_status(
     user_ids: List[str],
@@ -505,61 +508,4 @@ async def bulk_update_user_status(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error in bulk update: {str(e)}"
-        )
-
-
-from fastapi import Request
-
-# Add this endpoint to your users router
-@router.get("/me/profile", response_model=dict)
-async def get_my_profile(
-    request: Request,
-    current_user: dict = Depends(get_current_user)  # Use get_current_user instead of admin/staff
-):
-    """Get the current authenticated user's profile data"""
-    try:
-        # Get the current user's ID from the authenticated request
-        user_id = current_user.get("user_id") or current_user.get("id")
-        
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User ID not found in token"
-            )
-
-        # Query the user document
-        success, user_data, error = await database_service.query_documents(
-            COLLECTIONS["users"],
-            filters=[("user_id", "==", user_id)],
-            limit=1
-        )
-        
-        if not success or not user_data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User profile not found"
-            )
-        
-        user_profile = user_data[0]
-        
-        # Format the response exactly as required by Flutter app
-        response_data = {
-            "success": True,
-            "data": {
-                "id": user_profile.get("id", ""),
-                "first_name": user_profile.get("first_name", ""),
-                "building_id": user_profile.get("building_id", ""),
-                "unit_id": user_profile.get("unit_id", ""),
-                "building_unit": f"Building {user_profile.get('building_id', '')} • Unit {user_profile.get('unit_id', '')}"
-            }
-        }
-        
-        return response_data
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error retrieving user profile: {str(e)}"
         )

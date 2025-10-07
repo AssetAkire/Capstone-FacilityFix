@@ -34,6 +34,7 @@ class UpdateAnnouncementRequest(BaseModel):
 
 class AnnouncementResponse(BaseModel):
     id: str
+    formatted_id: Optional[str] = None  # Add formatted_id to response
     created_by: str
     building_id: str
     title: str

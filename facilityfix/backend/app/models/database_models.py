@@ -133,6 +133,7 @@ class InventoryUsageAnalytics(BaseModel):
 # Concern Slip Model
 class ConcernSlip(BaseModel):
     id: Optional[str] = None
+    formatted_id: Optional[str] = None  # e.g., "CS-2025-00001"
     reported_by: str  # user_id (tenant)
     unit_id: Optional[str] = None
     title: str
@@ -140,13 +141,21 @@ class ConcernSlip(BaseModel):
     location: str
     category: str  # electrical, plumbing, hvac, carpentry, maintenance, security, fire_safety, general
     priority: str = Field(default="medium")  # low, medium, high, critical
-    status: str = Field(default="pending")  # pending, evaluated, approved, rejected
+    status: str = Field(default="pending")  # pending, evaluated, approved, rejected, assigned, assessed, returned_to_tenant
     urgency_assessment: Optional[str] = None  # Admin's evaluation notes
     resolution_type: Optional[str] = None  # job_service, work_permit, rejected
     attachments: Optional[List[str]] = []  # file URLs
     admin_notes: Optional[str] = None
     evaluated_by: Optional[str] = None  # admin user_id
     evaluated_at: Optional[datetime] = None
+    assigned_to: Optional[str] = None  # staff user_id assigned for assessment
+    assigned_at: Optional[datetime] = None
+    staff_assessment: Optional[str] = None  # Staff's assessment text
+    staff_recommendation: Optional[str] = None  # Staff's recommendation
+    assessment_attachments: Optional[List[str]] = []  # Assessment file URLs
+    assessed_by: Optional[str] = None  # staff user_id who did assessment
+    assessed_at: Optional[datetime] = None
+    returned_to_tenant_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -373,6 +382,7 @@ class MaintenanceReport(BaseModel):
 # Announcement Model
 class Announcement(BaseModel):
     id: Optional[str] = None
+    formatted_id: Optional[str] = None  # Add formatted ID field (N-2025-00001)
     created_by: str  # user_id
     building_id: str
     title: str
@@ -435,3 +445,10 @@ class Feedback(BaseModel):
     communication: Optional[int] = Field(default=None, ge=1, le=5)
     would_recommend: Optional[bool] = None
     submitted_at: Optional[datetime] = None
+
+# Counter model for ID generation
+class Counter(BaseModel):
+    id: Optional[str] = None
+    year: int
+    counter: int
+    last_updated: Optional[datetime] = None
