@@ -28,7 +28,7 @@ class MaintenanceSchedulerService:
             next_due = self._calculate_next_due_date(schedule)
             schedule.next_due_date = next_due
             
-            success, schedule_id, error = self.db.create_document(
+            success, schedule_id, error = await self.db.create_document(
                 COLLECTIONS['maintenance_schedules'], 
                 schedule.dict(exclude_none=True)
             )
@@ -51,7 +51,7 @@ class MaintenanceSchedulerService:
         """Update an existing maintenance schedule"""
         try:
             # Get existing schedule
-            success, schedule_doc, error = self.db.get_document(COLLECTIONS['maintenance_schedules'], schedule_id)
+            success, schedule_doc, error = await self.db.get_document(COLLECTIONS['maintenance_schedules'], schedule_id)
             if not success:
                 return False, f"Schedule not found: {error}"
             
@@ -64,7 +64,7 @@ class MaintenanceSchedulerService:
                 schedule = MaintenanceSchedule(**{**schedule_doc, **update_data})
                 update_data['next_due_date'] = self._calculate_next_due_date(schedule)
             
-            success, error = self.db.update_document(COLLECTIONS['maintenance_schedules'], schedule_id, update_data)
+            success, error = await self.db.update_document(COLLECTIONS['maintenance_schedules'], schedule_id, update_data)
             
             if success:
                 logger.info(f"Updated maintenance schedule {schedule_id}")
@@ -88,7 +88,7 @@ class MaintenanceSchedulerService:
             if active_only:
                 filters.append(('is_active', '==', True))
             
-            success, schedules, error = self.db.query_documents(COLLECTIONS['maintenance_schedules'], filters)
+            success, schedules, error = await self.db.query_documents(COLLECTIONS['maintenance_schedules'], filters)
             
             if success:
                 return True, schedules, None
@@ -107,7 +107,7 @@ class MaintenanceSchedulerService:
             logger.info(f"Generating scheduled tasks for next {days_ahead} days")
             
             # Get all active schedules
-            success, schedules, error = self.db.query_documents(
+            success, schedules, error = await self.db.query_documents(
                 COLLECTIONS['maintenance_schedules'], 
                 [('is_active', '==', True)]
             )
@@ -154,7 +154,7 @@ class MaintenanceSchedulerService:
             if not existing_task:
                 # Generate task
                 task_data = await self._create_task_from_schedule(schedule, current_date)
-                success, task_id, error = self.db.create_document(COLLECTIONS['maintenance_tasks'], task_data)
+                success, task_id, error = await self.db.create_document(COLLECTIONS['maintenance_tasks'], task_data)
                 
                 if success:
                     tasks_generated += 1
@@ -175,14 +175,14 @@ class MaintenanceSchedulerService:
     async def _create_task_from_schedule(self, schedule: MaintenanceSchedule, scheduled_date: datetime) -> dict:
         """Create a maintenance task from a schedule"""
         # Get equipment details
-        success, equipment_doc, error = self.db.get_document(COLLECTIONS['equipment'], schedule.equipment_id)
+        success, equipment_doc, error = await self.db.get_document(COLLECTIONS['equipment'], schedule.equipment_id)
         equipment_name = equipment_doc.get('equipment_name', 'Unknown Equipment') if success else 'Unknown Equipment'
         location = equipment_doc.get('location', 'Unknown Location') if success else 'Unknown Location'
         
         # Get template if available
         template_data = {}
         if hasattr(schedule, 'template_id') and schedule.template_id:
-            success, template_doc, error = self.db.get_document(COLLECTIONS['maintenance_templates'], schedule.template_id)
+            success, template_doc, error = await self.db.get_document(COLLECTIONS['maintenance_templates'], schedule.template_id)
             if success:
                 template_data = template_doc
         
@@ -216,7 +216,7 @@ class MaintenanceSchedulerService:
             start_of_day = scheduled_date.replace(hour=0, minute=0, second=0, microsecond=0)
             end_of_day = scheduled_date.replace(hour=23, minute=59, second=59, microsecond=999999)
             
-            success, tasks, error = self.db.query_documents(
+            success, tasks, error = await self.db.query_documents(
                 COLLECTIONS['maintenance_tasks'],
                 [
                     ('schedule_id', '==', schedule_id),
@@ -238,7 +238,7 @@ class MaintenanceSchedulerService:
             logger.info("Checking usage-based maintenance schedules")
             
             # Get all active usage-based schedules
-            success, schedules, error = self.db.query_documents(
+            success, schedules, error = await self.db.query_documents(
                 COLLECTIONS['maintenance_schedules'],
                 [
                     ('is_active', '==', True),
@@ -269,7 +269,7 @@ class MaintenanceSchedulerService:
                         task_data = await self._create_task_from_schedule(schedule, datetime.now())
                         task_data['task_description'] += f" (Usage threshold reached: {usage_since_maintenance} {schedule.usage_unit})"
                         
-                        success, task_id, error = self.db.create_document(COLLECTIONS['maintenance_tasks'], task_data)
+                        success, task_id, error = await self.db.create_document(COLLECTIONS['maintenance_tasks'], task_data)
                         
                         if success:
                             tasks_generated += 1
@@ -298,7 +298,7 @@ class MaintenanceSchedulerService:
     async def _get_equipment_current_usage(self, equipment_id: str, usage_unit: str) -> float:
         """Get current total usage for equipment"""
         try:
-            success, usage_logs, error = self.db.query_documents(
+            success, usage_logs, error = await self.db.query_documents(
                 COLLECTIONS['equipment_usage_logs'],
                 [
                     ('equipment_id', '==', equipment_id),
@@ -320,24 +320,28 @@ class MaintenanceSchedulerService:
         """Get usage value at last maintenance for this schedule"""
         try:
             # Get last completed task for this schedule
-            success, tasks, error = self.db.query_documents(
+            success, tasks, error = await self.db.query_documents(
                 COLLECTIONS['maintenance_tasks'],
                 [
                     ('equipment_id', '==', equipment_id),
                     ('schedule_id', '==', schedule_id),
                     ('status', '==', 'completed')
-                ],
-                order_by='completed_at',
-                order_direction='desc',
-                limit=1
+                ]
             )
             
             if success and tasks:
-                last_task = tasks[0]
-                # Return usage value recorded at completion, or 0 if not recorded
-                return last_task.get('usage_at_completion', 0.0)
-            else:
-                return 0.0
+                # Sort by completed_at in descending order and get the first one
+                sorted_tasks = sorted(
+                    tasks, 
+                    key=lambda x: x.get('completed_at', datetime.min), 
+                    reverse=True
+                )
+                if sorted_tasks:
+                    last_task = sorted_tasks[0]
+                    # Return usage value recorded at completion, or 0 if not recorded
+                    return last_task.get('usage_at_completion', 0.0)
+            
+            return 0.0
                 
         except Exception as e:
             logger.error(f"Error getting last maintenance usage: {str(e)}")
@@ -449,14 +453,18 @@ class MaintenanceSchedulerService:
                 if 'date_to' in filters:
                     query_filters.append(('scheduled_date', '<=', filters['date_to']))
             
-            success, tasks, error = self.db.query_documents(
+            success, tasks, error = await self.db.query_documents(
                 COLLECTIONS['maintenance_tasks'], 
-                query_filters,
-                order_by='scheduled_date'
+                query_filters
             )
             
             if success:
-                return True, tasks, None
+                # Sort by scheduled_date
+                sorted_tasks = sorted(
+                    tasks, 
+                    key=lambda x: x.get('scheduled_date', datetime.min)
+                )
+                return True, sorted_tasks, None
             else:
                 logger.error(f"Failed to get maintenance tasks: {error}")
                 return False, [], error
@@ -481,7 +489,7 @@ class MaintenanceSchedulerService:
             if notes:
                 update_data['completion_notes'] = notes
             
-            success, error = self.db.update_document(COLLECTIONS['maintenance_tasks'], task_id, update_data)
+            success, error = await self.db.update_document(COLLECTIONS['maintenance_tasks'], task_id, update_data)
             
             if success:
                 logger.info(f"Updated task {task_id} status to {status}")
@@ -503,7 +511,7 @@ class MaintenanceSchedulerService:
         """Handle post-completion actions for a maintenance task"""
         try:
             # Get completed task
-            success, task_doc, error = self.db.get_document(COLLECTIONS['maintenance_tasks'], task_id)
+            success, task_doc, error = await self.db.get_document(COLLECTIONS['maintenance_tasks'], task_id)
             if not success:
                 return
             
@@ -511,7 +519,7 @@ class MaintenanceSchedulerService:
             
             # If task has a schedule, update the schedule's next due date
             if task.schedule_id:
-                success, schedule_doc, error = self.db.get_document(COLLECTIONS['maintenance_schedules'], task.schedule_id)
+                success, schedule_doc, error = await self.db.get_document(COLLECTIONS['maintenance_schedules'], task.schedule_id)
                 if success:
                     schedule = MaintenanceSchedule(**schedule_doc)
                     next_due = self._calculate_next_due_date(schedule)
@@ -526,6 +534,15 @@ class MaintenanceSchedulerService:
             
         except Exception as e:
             logger.error(f"Error handling task completion: {str(e)}")
+
+    async def _generate_tasks_for_schedule(self, schedule_id: str, schedule: MaintenanceSchedule):
+        """Generate initial tasks for a new schedule"""
+        try:
+            # Generate tasks for the next 30 days
+            end_date = datetime.now() + timedelta(days=30)
+            await self._generate_tasks_for_schedule_period(schedule, end_date)
+        except Exception as e:
+            logger.error(f"Error generating initial tasks for schedule {schedule_id}: {str(e)}")
 
 # Create singleton instance
 maintenance_scheduler_service = MaintenanceSchedulerService()

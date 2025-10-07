@@ -9,6 +9,7 @@ from ..database.collections import COLLECTIONS
 from .notification_service import notification_service
 from .email_service import email_service
 from .websocket_service import websocket_notification_service
+from .announcement_id_service import announcement_id_service
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +50,15 @@ class AnnouncementService:
             (success, announcement_id, error_message)
         """
         try:
-            # Generate unique announcement ID
+            formatted_id = await announcement_id_service.generate_announcement_id()
+            
+            # Generate unique announcement ID for database
             announcement_id = str(uuid.uuid4())
             
             # Create announcement data
             announcement_data = {
                 "id": announcement_id,
+                "formatted_id": formatted_id,  # Add formatted ID
                 "created_by": created_by,
                 "building_id": building_id,
                 "title": title,
@@ -77,7 +81,7 @@ class AnnouncementService:
             if not success:
                 return False, None, f"Failed to create announcement: {error}"
             
-            logger.info(f"Announcement created: {announcement_id} by {created_by}")
+            logger.info(f"Announcement created: {formatted_id} ({announcement_id}) by {created_by}")
             
             # Broadcast announcement via notification channels
             if send_notifications or send_email:
@@ -129,12 +133,16 @@ class AnnouncementService:
             success, announcements, error = await self.db.query_documents(
                 COLLECTIONS['announcements'],
                 filters,
-                order_by=[('date_added', 'desc')],
                 limit=limit
             )
             
             if success:
-                return announcements
+                announcements_sorted = sorted(
+                    announcements,
+                    key=lambda x: x.get('date_added', datetime.min),
+                    reverse=True
+                )
+                return announcements_sorted
             else:
                 logger.error(f"Failed to get announcements: {error}")
                 return []

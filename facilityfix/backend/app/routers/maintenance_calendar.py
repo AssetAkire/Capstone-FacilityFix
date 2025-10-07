@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, require_staff_or_admin
 from ..services.maintenance_scheduler_service import maintenance_scheduler_service
 from ..services.equipment_usage_service import equipment_usage_service
 from ..database.database_service import database_service
@@ -191,6 +191,49 @@ async def delete_maintenance_schedule(
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 # Task Management Endpoints
+@router.post("/tasks", response_model=Dict[str, Any])
+async def create_maintenance_task(
+    task_data: Dict[str, Any],
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new maintenance task"""
+    try:
+        # Verify user has admin/staff role
+        if current_user.get('role') not in ['admin', 'staff']:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        # Add metadata
+        task_data['created_at'] = datetime.now().isoformat()
+        task_data['created_by'] = current_user['uid']
+        task_data['updated_at'] = datetime.now().isoformat()
+        task_data['updated_by'] = current_user['uid']
+        
+        # Use the task code as the document ID
+        task_id = task_data.get('taskCode', task_data.get('id'))
+        
+        # Save to database
+        success, doc_id, error = await database_service.create_document(
+            COLLECTIONS['maintenance_tasks'],
+            task_data,
+            document_id=task_id,
+            validate=False
+        )
+        
+        if success:
+            return {
+                "success": True,
+                "task_id": doc_id,
+                "message": "Maintenance task created successfully"
+            }
+        else:
+            raise HTTPException(status_code=400, detail=error)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to create maintenance task: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
 @router.get("/tasks", response_model=Dict[str, Any])
 async def get_maintenance_tasks(
     building_id: str = Query(..., description="Building ID"),
@@ -230,6 +273,33 @@ async def get_maintenance_tasks(
             }
         else:
             raise HTTPException(status_code=400, detail=error)
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.get("/tasks/{task_id}", response_model=Dict[str, Any])
+async def get_maintenance_task_by_id(
+    task_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get a single maintenance task by ID"""
+    try:
+        success, task_doc, error = await database_service.get_document(
+            COLLECTIONS['maintenance_tasks'],
+            task_id
+        )
+        
+        if success and task_doc:
+            return {
+                "success": True,
+                "task": task_doc
+            }
+        elif not success:
+            raise HTTPException(status_code=400, detail=error)
+        else:
+            raise HTTPException(status_code=404, detail="Task not found")
             
     except HTTPException:
         raise
@@ -582,4 +652,147 @@ async def check_usage_thresholds(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"[ERROR] Failed to check usage thresholds: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.get("/next-ipm-code", response_model=Dict[str, Any])
+async def get_next_ipm_code(
+    current_user: dict = Depends(require_staff_or_admin)  # Using require_staff_or_admin dependency instead of manual role check
+):
+    """Get the next sequential IPM code"""
+    try:
+        current_year = datetime.now().year
+        
+        success, tasks_doc, error = await database_service.get_document(
+            COLLECTIONS['maintenance_tasks'],
+            'ipm_counter'
+        )
+        
+        if success and tasks_doc:
+            # Get the last counter and year
+            last_counter = tasks_doc.get('counter', 0)
+            last_year = tasks_doc.get('year', current_year)
+            
+            # Reset counter if year changed
+            if last_year != current_year:
+                next_counter = 1
+            else:
+                next_counter = last_counter + 1
+            
+            await database_service.update_document(
+                COLLECTIONS['maintenance_tasks'],
+                'ipm_counter',
+                {
+                    'counter': next_counter,
+                    'year': current_year,
+                    'updated_at': datetime.now().isoformat(),
+                    'updated_by': current_user['uid']
+                },
+                validate=False
+            )
+        else:
+            next_counter = 1
+            await database_service.create_document(
+                COLLECTIONS['maintenance_tasks'],
+                {
+                    'counter': next_counter,
+                    'year': current_year,
+                    'created_at': datetime.now().isoformat(),
+                    'updated_at': datetime.now().isoformat(),
+                    'created_by': current_user['uid'],
+                    'updated_by': current_user['uid']
+                },
+                document_id='ipm_counter',
+                validate=False
+            )
+        
+        # Format the code
+        code = f"IPM-{current_year}-{str(next_counter).zfill(5)}"
+        
+        return {
+            "success": True,
+            "code": code,
+            "counter": next_counter,
+            "year": current_year
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to generate IPM code: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.get("/next-epm-code", response_model=Dict[str, Any])
+async def get_next_epm_code(
+    current_user: dict = Depends(get_current_user)  # Using get_current_user instead of require_staff_or_admin
+):
+    """Get the next sequential EPM code"""
+    try:
+        if current_user.get('role') not in ['admin', 'staff']:
+            print(f"[ERROR] EPM code access denied for user {current_user.get('email')} with role {current_user.get('role')}")
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        print(f"[DEBUG] Generating EPM code for user {current_user.get('email')}")
+        
+        current_year = datetime.now().year
+        
+        success, tasks_doc, error = await database_service.get_document(
+            COLLECTIONS['maintenance_tasks'],
+            'epm_counter'
+        )
+        
+        if success and tasks_doc:
+            # Get the last counter and year
+            last_counter = tasks_doc.get('counter', 0)
+            last_year = tasks_doc.get('year', current_year)
+            
+            # Reset counter if year changed
+            if last_year != current_year:
+                next_counter = 1
+            else:
+                next_counter = last_counter + 1
+            
+            await database_service.update_document(
+                COLLECTIONS['maintenance_tasks'],
+                'epm_counter',
+                {
+                    'counter': next_counter,
+                    'year': current_year,
+                    'updated_at': datetime.now().isoformat(),
+                    'updated_by': current_user['uid']
+                },
+                validate=False
+            )
+        else:
+            next_counter = 1
+            await database_service.create_document(
+                COLLECTIONS['maintenance_tasks'],
+                {
+                    'counter': next_counter,
+                    'year': current_year,
+                    'created_at': datetime.now().isoformat(),
+                    'updated_at': datetime.now().isoformat(),
+                    'created_by': current_user['uid'],
+                    'updated_by': current_user['uid']
+                },
+                document_id='epm_counter',
+                validate=False
+            )
+        
+        # Format the code
+        code = f"EPM-{current_year}-{str(next_counter).zfill(5)}"
+        
+        print(f"[DEBUG] Generated EPM code: {code}")
+        
+        return {
+            "success": True,
+            "code": code,
+            "counter": next_counter,
+            "year": current_year
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to generate EPM code: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")

@@ -382,6 +382,7 @@ class MaintenanceReport(BaseModel):
 # Announcement Model
 class Announcement(BaseModel):
     id: Optional[str] = None
+    formatted_id: Optional[str] = None  # Add formatted ID field (N-2025-00001)
     created_by: str  # user_id
     building_id: str
     title: str
