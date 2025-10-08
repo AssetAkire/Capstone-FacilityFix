@@ -119,27 +119,46 @@ async def assign_staff_to_concern_slip(
             detail=f"Failed to assign staff: {str(e)}"
         )
 
-@router.get("/{concern_slip_id}", response_model=ConcernSlip)
-async def get_concern_slip(
+@router.get("/{concern_slip_id}")
+async def get_concern_slip_by_id(
     concern_slip_id: str,
-    current_user: dict = Depends(get_current_user),
-    _: None = Depends(require_role(["admin", "tenant"]))
+    current_user: dict = Depends(get_current_user)
 ):
-    """Get concern slip by ID"""
+    """Get a specific concern slip by ID"""
     try:
-        service = ConcernSlipService()
-        concern_slip = await service.get_concern_slip(concern_slip_id)
+        concern_service = ConcernSlipService()
+        concern_slip = await concern_service.get_concern_slip(concern_slip_id)
+        
         if not concern_slip:
             raise HTTPException(status_code=404, detail="Concern slip not found")
         
-        # Tenants can only view their own concern slips
-        if current_user.get("role") == "tenant" and concern_slip.reported_by != current_user["uid"]:
-            raise HTTPException(status_code=403, detail="Access denied")
+        return {
+            "id": concern_slip.id,
+            "formatted_id": concern_slip.formatted_id,
+            "title": concern_slip.title,
+            "description": concern_slip.description,
+            "location": concern_slip.location,
+            "category": concern_slip.category,
+            "priority": concern_slip.priority,
+            "status": concern_slip.status,
+            "unit_id": concern_slip.unit_id,
+            "reported_by": concern_slip.reported_by,
+            "assigned_to": concern_slip.assigned_to,
+            "created_at": concern_slip.created_at.isoformat() if concern_slip.created_at else None,
+            "updated_at": concern_slip.updated_at.isoformat() if concern_slip.updated_at else None,
+            "request_type": "Concern Slip",
+            "attachments": getattr(concern_slip, 'attachments', []),
+            "staff_assessment": getattr(concern_slip, 'staff_assessment', None),
+            "staff_recommendation": getattr(concern_slip, 'staff_recommendation', None),
+            "admin_notes": getattr(concern_slip, 'admin_notes', None),
+            "ai_processed": getattr(concern_slip, 'ai_processed', False),
+            "detected_language": getattr(concern_slip, 'detected_language', 'en'),
+            "translation_applied": getattr(concern_slip, 'translation_applied', False),
+            "ai_confidence_scores": getattr(concern_slip, 'ai_confidence_scores', {}),
+        }
         
-        return concern_slip
-    except HTTPException:
-        raise
     except Exception as e:
+        logger.error(f"Error getting concern slip {concern_slip_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get concern slip: {str(e)}")
 
 @router.get("/{concern_slip_id}/ai-history")
@@ -331,44 +350,217 @@ async def get_concern_slips_by_staff(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get concern slips: {str(e)}")
 
-@router.get("/", response_model=List[ConcernSlip])
-async def get_all_concern_slips(
-    current_user: dict = Depends(get_current_user)
+@router.get("/")
+async def get_all_concern_slips(current_user: dict = Depends(get_current_user)):
+    """Get all concern slips - works for both admin and tenant views"""
+    try:
+        logger.info(f"[DEBUG] Fetching concern slips for user: {current_user.get('email')} with role: {current_user.get('role')}")
+        
+        concern_service = ConcernSlipService()
+        
+        # Get all concern slips from Firebase
+        concern_slips = await concern_service.get_all_concern_slips()
+        
+        logger.info(f"[DEBUG] Found {len(concern_slips)} concern slips in database")
+        
+        # Convert to dict format for API response
+        result = []
+        for slip in concern_slips:
+            slip_dict = {
+                "id": slip.id,
+                "formatted_id": slip.formatted_id,
+                "title": slip.title,
+                "description": slip.description,
+                "location": slip.location,
+                "category": slip.category,
+                "priority": slip.priority,
+                "status": slip.status,
+                "unit_id": slip.unit_id,
+                "reported_by": slip.reported_by,
+                "assigned_to": slip.assigned_to,
+                "created_at": slip.created_at.isoformat() if slip.created_at else None,
+                "updated_at": slip.updated_at.isoformat() if slip.updated_at else None,
+                "request_type": "Concern Slip",
+                "attachments": getattr(slip, 'attachments', []),
+                "staff_assessment": getattr(slip, 'staff_assessment', None),
+                "staff_recommendation": getattr(slip, 'staff_recommendation', None),
+                "admin_notes": getattr(slip, 'admin_notes', None),
+                "ai_processed": getattr(slip, 'ai_processed', False),
+                "detected_language": getattr(slip, 'detected_language', 'en'),
+                "translation_applied": getattr(slip, 'translation_applied', False),
+                "ai_confidence_scores": getattr(slip, 'ai_confidence_scores', {}),
+            }
+            result.append(slip_dict)
+        
+        logger.info(f"[DEBUG] Returning {len(result)} concern slips")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting concern slips: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get concern slips: {str(e)}")
+    
+@router.patch("/{concern_slip_id}", response_model=ConcernSlip)
+async def update_concern_slip(
+    concern_slip_id: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    location: Optional[str] = None,
+    category: Optional[str] = None,
+    priority: Optional[str] = None,
+    unit_id: Optional[str] = None,
+    attachments: Optional[List[str]] = None,
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_role(["tenant", "admin"]))
 ):
     """
-    Get concern slips based on user role:
-    - Tenants: Get only their own concern slips
-    - Staff: Get only concern slips assigned to them
-    - Admins: Get all concern slips
+    Update a concern slip (Tenant can update their own, Admin can update any).
+    Only pending concern slips can be updated by tenants.
     """
     try:
         service = ConcernSlipService()
-        user_role = current_user.get("role")
-        user_id = current_user.get("uid")
+        concern_slip = await service.get_concern_slip(concern_slip_id)
         
-        if user_role == "tenant":
-            # Tenants get only their own concern slips
-            concern_slips = await service.get_concern_slips_by_tenant(user_id)
-        elif user_role == "staff":
-            # Staff get only concern slips assigned to them
-            concern_slips = await service.get_concern_slips_by_staff(user_id)
-        elif user_role == "admin":
-            # Admins get all concern slips
-            concern_slips = await service.get_all_concern_slips()
-            # Sort by creation date (latest first)
-            concern_slips.sort(key=lambda slip: slip.created_at, reverse=True)
-        else:
-            raise HTTPException(
-                status_code=403, 
-                detail=f"Insufficient permissions. Required role: admin, tenant, or staff, current role: {user_role}"
-            )
-
-        return concern_slips
-
+        if not concern_slip:
+            raise HTTPException(status_code=404, detail="Concern slip not found")
+        
+        # Tenants can only update their own concern slips
+        if current_user.get("role") == "tenant":
+            if concern_slip.reported_by != current_user["uid"]:
+                raise HTTPException(status_code=403, detail="You can only update your own concern slips")
+            
+            # Tenants can only update pending concern slips
+            if concern_slip.status != "pending":
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Cannot update concern slip with status: {concern_slip.status}. Only pending concern slips can be updated."
+                )
+        
+        # Build update data
+        update_data = {}
+        if title is not None:
+            update_data["title"] = title
+        if description is not None:
+            update_data["description"] = description
+            update_data["original_description"] = description
+        if location is not None:
+            update_data["location"] = location
+        if category is not None:
+            update_data["category"] = category
+        if priority is not None:
+            update_data["priority"] = priority
+        if unit_id is not None:
+            update_data["unit_id"] = unit_id
+        if attachments is not None:
+            update_data["attachments"] = attachments
+        
+        update_data["updated_at"] = datetime.utcnow()
+        
+        # Update the concern slip
+        from app.database.database_service import database_service
+        success, error = await database_service.update_document(
+            "concern_slips", 
+            concern_slip_id, 
+            update_data
+        )
+        
+        if not success:
+            raise HTTPException(status_code=500, detail=f"Failed to update concern slip: {error}")
+        
+        # Return updated concern slip
+        updated_concern = await service.get_concern_slip(concern_slip_id)
+        return updated_concern
+        
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get concern slips: {str(e)}"
+            detail=f"Failed to update concern slip: {str(e)}"
         )
+
+@router.delete("/{concern_slip_id}")
+async def delete_concern_slip(
+    concern_slip_id: str,
+    current_user: dict = Depends(get_current_user),
+    _: None = Depends(require_role(["tenant", "admin"]))
+):
+    """
+    Delete a concern slip (Tenant can delete their own, Admin can delete any).
+    Only pending concern slips can be deleted by tenants.
+    """
+    try:
+        service = ConcernSlipService()
+        concern_slip = await service.get_concern_slip(concern_slip_id)
+        
+        if not concern_slip:
+            raise HTTPException(status_code=404, detail="Concern slip not found")
+        
+        # Tenants can only delete their own concern slips
+        if current_user.get("role") == "tenant":
+            if concern_slip.reported_by != current_user["uid"]:
+                raise HTTPException(status_code=403, detail="You can only delete your own concern slips")
+            
+            # Tenants can only delete pending concern slips
+            if concern_slip.status != "pending":
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Cannot delete concern slip with status: {concern_slip.status}. Only pending concern slips can be deleted."
+                )
+        
+        # Delete the concern slip
+        from app.database.database_service import database_service
+        success, error = await database_service.delete_document("concern_slips", concern_slip_id)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail=f"Failed to delete concern slip: {error}")
+        
+        return {
+            "success": True,
+            "message": "Concern slip deleted successfully",
+            "id": concern_slip_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete concern slip: {str(e)}"
+        )
+    
+@router.post("/")
+async def create_concern_slip(
+    concern_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a new concern slip"""
+    try:
+        concern_service = ConcernSlipService()
+        
+        # Create concern slip
+        concern_slip = await concern_service.create_concern_slip(
+            reported_by=current_user.get('uid'),
+            concern_data=concern_data
+        )
+        
+        return {
+            "success": True,
+            "message": "Concern slip created successfully",
+            "id": concern_slip.id,
+            "formatted_id": concern_slip.formatted_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating concern slip: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create concern slip: {str(e)}")
+
+@router.get("/next-id")
+async def get_next_concern_slip_id(current_user: dict = Depends(get_current_user)):
+    """Get the next available concern slip ID"""
+    try:
+        from app.services.concern_slip_id_service import concern_slip_id_service
+        next_id = await concern_slip_id_service.generate_concern_slip_id()
+        return {"next_id": next_id}
+    except Exception as e:
+        logger.error(f"Error generating next concern slip ID: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate ID: {str(e)}")
