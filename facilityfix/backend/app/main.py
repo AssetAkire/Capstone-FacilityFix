@@ -58,6 +58,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
+origins = [
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:53054",         # if you test with that dev port
+    "http://192.168.1.12:8080",       # if you open from other devices
+]
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -94,13 +101,15 @@ routers_to_load = [
     ("app.routers.job_services", "Job Services"),
     ("app.routers.work_order_permits", "Work Order Permits"),
     ("app.routers.inventory", "Inventory Management"),
-    ("app.routers.maintenance_calendar", "Maintenance Calendar"),
+    ("app.routers.maintenance_calendar", "Maintenance"),  # Update maintenance router to use /maintenance prefix instead of /maintenance-calendar
     ("app.routers.notifications", "Notifications"),
     ("app.routers.websocket", "WebSocket"),
     ("app.routers.announcements", "Announcements"),
     ("app.routers.file_storage", "File Storage"),
     ("app.routers.analytics", "Analytics"),
     ("app.routers.reporting", "Reporting & Analytics"),
+    ("app.routers.admin_dashboard", "Admin Dashboard"), 
+    ("app.routers.maintenance", "Maintenance"), 
 ]
 
 successful_routers = []
